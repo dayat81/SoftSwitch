@@ -925,11 +925,11 @@ int Prog_xdp(struct xdp_md *ctx)
     t_key.src_ipv4 = ip_header->saddr;
     t_key.dst_ipv4 = ip_header->daddr;
 
-    // Blacklist check - drop if source IP is in blacklist
-    __u8 *blocked = bpf_map_lookup_elem(&Map_blacklist, &t_key.src_ipv4);
+    // Blacklist check - drop if destination IP is in blacklist
+    __u8 *blocked = bpf_map_lookup_elem(&Map_blacklist, &t_key.dst_ipv4);
     if (blocked && *blocked)
     {
-        bpf_printk("[XDP] BLOCKED IP: %pI4", &t_key.src_ipv4);
+        bpf_printk("[XDP] BLOCKED DST IP: %pI4", &t_key.dst_ipv4);
         goto drop;
     }
 

@@ -346,7 +346,8 @@ def get_stats():
             "vlan": v['vlan'],
             "pps": round(v['pps'], 1),
             "bps": round(v['bps'], 1),
-            "pkts": v['pkts']
+            "pkts": v['pkts'],
+            "bytes": v['bytes']
         })
     
     for k in to_delete: del stream_stats[k]
@@ -357,17 +358,18 @@ def get_stats():
         svc = item['service']
         if svc not in grouped:
             grouped[svc] = {
-                'service': svc, 'pkts': 0, 'bps': 0.0, 'pps': 0.0,
+                'service': svc, 'pkts': 0, 'bytes': 0, 'bps': 0.0, 'pps': 0.0,
                 'flows': 0, 'status': item['status'], 'details': []
             }
         grouped[svc]['pkts'] += item['pkts']
         grouped[svc]['bps'] += item['bps']
         grouped[svc]['pps'] += item['pps']
         grouped[svc]['flows'] += 1
+        grouped[svc]['bytes'] += item['bytes']
         grouped[svc]['details'].append({
             'src': item['src'], 'dst': item['dst'], 'host': item['host'],
             'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
-            'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
+            'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
         })
     return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
 

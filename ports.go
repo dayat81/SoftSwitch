@@ -26,7 +26,7 @@ import (
 
 const MAX_IFACES = 80
 const TRAFFIC_KEY_SIZE = 16
-const STATS_ENABLED = false
+const STATS_ENABLED = true
 
 var FEATURES_ENABLE = map[string]bool{
 	// "rx-gro":                  true,

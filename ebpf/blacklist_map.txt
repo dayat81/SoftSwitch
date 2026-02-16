@@ -1,0 +1,9 @@
+
+// Blacklist map for blocking IPs
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);  // IPv4 address
+    __type(value, __u8); // 1 = blocked
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} Map_blacklist SEC(".maps");

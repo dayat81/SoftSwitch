@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlueWall Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #6366f1;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --text: #f8fafc;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff, #6366f1);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #hidden-count {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #hidden-count:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: inherit;
+            min-width: 250px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-block {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-unblock {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-hide {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border: 1px solid var(--glass-border);
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        th {
+            text-align: left;
+            padding: 15px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        tr {
+            background: var(--glass);
+            transition: transform 0.2s;
+        }
+
+        tr:hover {
+            transform: scale(1.005);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        td {
+            padding: 15px;
+            border-top: 1px solid var(--glass-border);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        td:first-child {
+            border-left: 1px solid var(--glass-border);
+            border-radius: 12px 0 0 12px;
+        }
+
+        td:last-child {
+            border-right: 1px solid var(--glass-border);
+            border-radius: 0 12px 12px 0;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-pass {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .badge-block {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .host {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-weight: 800;
+            font-size: 2rem;
+        }
+
+        /* Modal for hidden rows */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #16161a;
+            border: 1px solid var(--glass-border);
+            padding: 30px;
+            border-radius: 20px;
+            z-index: 2000;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            min-width: 500px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-weight: 600;
+            padding: 5px 15px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+
+        .tab-btn.active {
+            color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+        /* Tab Navigation Styles */
+        .dashboard-tabs {
+            display: flex;
+            gap: 5px;
+            margin-left: auto;
+            margin-right: 20px;
+        }
+        .dashboard-tab {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: #94a3b8;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dashboard-tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        .dashboard-tab.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .dashboard-tab.tab-malicious {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .dashboard-tab.tab-malicious:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        .dashboard-tab.tab-malicious.active {
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+        #malicious-count {
+            background: #ef4444;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            display: none;
+        }
+        #malicious-dashboard {
+            display: none;
+        }
+        .malicious-header {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05)) !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        }
+        /* OWASP Classification Styles */
+        .owasp-category {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .owasp-injection {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .owasp-xss {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .owasp-traversal {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        .owasp-rce {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        .owasp-brute {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .owasp-scan {
+            background: rgba(6, 182, 212, 0.2);
+            color: #22d3ee;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        .owasp-unknown {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .owasp-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .owasp-stat-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .owasp-stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+        .owasp-stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">INITIALIZING BLUEWALL...</div>
+
+    <div id="hidden-modal" class="modal">
+        <h3 style="margin-top: 0;">Hidden Items</h3>
+        <div id="hidden-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
+        <button onclick="closeHidden()" style="background: var(--glass); color: white; width: 100%;">Close</button>
+    </div>
+
+    <div id="block-modal" class="modal">
+        <h3 style="margin-top: 0; color: var(--danger);">Blacklist Manager</h3>
+        <div class="tab-nav">
+            <button id="tab-services" class="tab-btn active" onclick="switchTab('services')">SERVICES</button>
+            <button id="tab-ips" class="tab-btn" onclick="switchTab('ips')">IP DETAILS</button>
+        </div>
+        <div id="block-list-content" style="margin-bottom: 20px; max-height: 400px; overflow-y: auto;"></div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button id="batch-label-btn" onclick="batchLabel()" class="btn-hide" style="flex: 1; display: none;">BATCH
+                LABEL</button>
+            <button onclick="clearBlacklist()" class="btn-block" style="flex: 1;">CLEAR ALL BLOCKS</button>
+            <button onclick="closeBlocks()" style="background: var(--glass); color: white; flex: 1;">Close</button>
+        </div>
+    </div>
+
+    <div id="main-dashboard" class="container text-center">
+        <header>
+            <div>
+                <h1>BLUEWALL</h1>
+                <div style="font-size: 0.8rem; color: #6366f1;">Real-time eBPF Buffer Monitoring</div>
+            </div>
+            <div class="controls">
+                <div id="hidden-count" onclick="openHidden()">0 Hidden</div>
+                <button class="btn-hide" onclick="openBlocks()" style="margin-right: 10px;">MANAGE BLOCKS</button>
+                <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;"
+                    title="Reset eBPF hashmap (affects all traffic)"
+                >🔄 RESET ALL (eBPF)</button>
+                <input type="text" id="target-input" placeholder="IP Address or Service (e.g. Netflix)">
+                <button class="btn-block" onclick="action('block')">BLOCK</button>
+                <button class="btn-unblock" onclick="action('unblock')">UNBLOCK</button>
+            </div>
+            <div class="dashboard-tabs">
+                <button id="tab-main" class="dashboard-tab active" onclick="switchDashboardTab('main')">
+                    📊 All Traffic
+                </button>
+                <button id="tab-malicious" class="dashboard-tab tab-malicious" onclick="switchDashboardTab('malicious')">
+                    🚨 Malicious
+                    <span id="malicious-count">0</span>
+                </button>
+            </div>
+        </header>
+
+        <table id="stats-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th colspan="2">Service</th>
+                    <th colspan="3"></th>
+                    <th style="text-align: right;">PPS</th>
+                    <th style="text-align: right;">BPS</th>
+                    <th style="text-align: right;">Packets</th>
+                    <th style="text-align: right;">Bytes</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Separate tracking for normal vs malicious flows (DECLARE FIRST)
+        let normalFlowsCache = new Map();    // Normal traffic flows
+        let normalHiddenItems = new Set();   // Hidden items for normal tab only
+        let normalExpandedServices = new Set(); // Expanded services for normal tab only
+        let maliciousFlowsCache = new Map();    // Malicious traffic flows
+        let maliciousHiddenItems = new Set();   // Hidden items for malicious tab only
+        
+        // Shared references - will point to specific hashmaps based on active tab
+        let hiddenItems = normalHiddenItems;
+        let expandedServices = normalExpandedServices;
+        let selectedBlacklistItems = new Set();
+        let currentTab = 'services';
+        let ipFilter = null;
+        let blacklistData = null;
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (!Array.isArray(data)) throw new Error('Invalid data format');
+                renderTable(data);
+            } catch (e) {
+                console.error("Fetch error:", e);
+            } finally {
+                // Always hide overlay after first attempt
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+        }
+
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+        function renderTable(data) {
+            const body = document.getElementById('stats-body');
+            body.innerHTML = '';
+            document.getElementById('hidden-count').innerText = `${normalHiddenItems.size} Hidden`;
+            
+            data.forEach(service => {
+                // Service summary row
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.style.background = 'var(--glass)';
+                tr.style.borderLeft = '3px solid #6366f1';
+                const isExpanded = normalExpandedServices.has(service.service);
+                tr.innerHTML = `
+                    <td><span class="badge badge-${service.status.toLowerCase()}">${service.status}</span></td>
+                    <td colspan="2">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.2rem; transition: transform 0.2s;" id="icon-${service.service}">${isExpanded ? '▼' : '▶'}</span>
+                            <span style="color: #fbbf24; font-weight: 600; font-size: 1.1rem;">${service.service}</span>
+                            <span style="color: #94a3b8; font-size: 0.8rem;">(${service.flows || 0} flows)</span>
+                        </div>
+                    </td>
+                    <td colspan="3"></td>
+                    <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.pps ? service.pps.toFixed(1) : 0.0}</td>
+                    <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.bps ? service.bps.toFixed(1) : 0.0}</td>
+                    <td style="text-align: right; font-weight: 800; font-size: 1.1rem;">${service.pkts ? service.pkts.toLocaleString() : 0}</td>
+                    <td style="text-align: right; color: #60a5fa; font-weight: 600;">${service.bytes ? formatBytes(service.bytes) : "0 B"}</td>
+                    <td style="text-align: center;">
+                        <button onclick="event.stopPropagation(); blockService('${service.service}')" 
+                                class="btn-${service.status === 'PASS' ? 'block' : 'unblock'}" 
+                                style="padding: 5px 12px; font-size: 0.7rem;">
+                            ${service.status === 'PASS' ? 'BLOCK' : 'UNBLOCK'}
+                        </button>
+                    </td>
+                `;
+                tr.onclick = () => toggleService(service.service);
+                body.appendChild(tr);
+                
+                // Expanded details rows
+                if (isExpanded && service.details) {
+                    service.details.forEach(flow => {
+                        const detailTr = document.createElement('tr');
+                        detailTr.style.background = 'rgba(255, 255, 255, 0.02)';
+                        detailTr.style.fontSize = '0.85rem';
+                        detailTr.innerHTML = `
+                            <td></td>
+                            <td>
+                                <div class="mono">${flow.src}</div>
+                                <div class="host">${flow.host}</div>
+                            </td>
+                            <td></td>
+                            <td class="mono">${flow.dst}</td>
+                            <td>${flow.proto}</td>
+                            <td class="mono">${flow.vlan}</td>
+                            <td style="text-align: right; color: #4ade80;">${flow.pps || 0}</td>
+                            <td style="text-align: right; color: #4ade80;">${flow.bps || 0}</td>
+                            <td style="text-align: right;">${flow.pkts || 0}</td>
+                            <td style="text-align: right; color: #60a5fa;">${flow.bytes ? formatBytes(flow.bytes) : "0 B"}</td>
+                            <td style="text-align: center;">
+                                <button onclick="handleBlock('${flow.status}', '${flow.dst}')" 
+                                        class="btn-${flow.status === 'PASS' ? 'block' : 'unblock'}" 
+                                        style="padding: 3px 8px; font-size: 0.6rem;">
+                                    ${flow.status === 'PASS' ? 'BLOCK' : 'UNBLOCK'}
+                                </button>
+                            </td>
+                        `;
+                        body.appendChild(detailTr);
+                    });
+                }
+            });
+        }
+        
+        function toggleService(serviceName) {
+            if (normalExpandedServices.has(serviceName)) {
+                normalExpandedServices.delete(serviceName);
+            } else {
+                normalExpandedServices.add(serviceName);
+            }
+            fetchStats();
+        }
+        
+        function blockService(serviceName) {
+            // Block all IPs in this service
+            alert('Block all flows for ' + serviceName);
+        }
+
+        function hideItem(key) {
+            normalHiddenItems.add(key);
+            fetchStats();
+        }
+
+        function openHidden() {
+            const list = document.getElementById('hidden-list');
+            list.innerHTML = '';
+            if (normalHiddenItems.size === 0) {
+                list.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No items hidden</div>';
+            }
+            normalHiddenItems.forEach(key => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '10px';
+                div.style.borderBottom = '1px solid var(--glass-border)';
+                div.innerHTML = `
+                    <span class="mono" style="font-size: 0.8rem;">${key}</span>
+                    <button onclick="unhideItem('${key}')" class="btn-unblock" style="padding: 5px 10px; font-size: 0.6rem;">RESTORE</button>
+                `;
+                list.appendChild(div);
+            });
+            document.getElementById('hidden-modal').style.display = 'block';
+        }
+
+        function closeHidden() {
+            document.getElementById('hidden-modal').style.display = 'none';
+        }
+
+        function unhideItem(key) {
+            normalHiddenItems.delete(key);
+            openHidden();
+            fetchStats();
+        }
+
+        async function openBlocks(filter = null) {
+            ipFilter = filter;
+            selectedBlacklistItems.clear();
+            updateBatchButton();
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">Loading...</div>';
+            document.getElementById('block-modal').style.display = 'block';
+
+            try {
+                const res = await fetch('/api/blacklist');
+                blacklistData = await res.json();
+                renderBlacklist();
+            } catch (e) {
+                content.innerHTML = '<div style="color: var(--danger);">Failed to load blacklist</div>';
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            if (tab === 'services') ipFilter = null;
+            document.getElementById('tab-services').classList.toggle('active', tab === 'services');
+            document.getElementById('tab-ips').classList.toggle('active', tab === 'ips');
+            renderBlacklist();
+        }
+
+        function renderBlacklist() {
+            if (!blacklistData) return;
+            if (currentTab === 'services') {
+                renderServicesTab();
+            } else {
+                renderIpsTab();
+            }
+        }
+
+        function renderServicesTab() {
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '';
+
+            const serviceStats = {};
+            blacklistData.ips.forEach(ip => {
+                const name = blacklistData.custom_services[ip] || 'Unlabeled IPs';
+                if (!serviceStats[name]) serviceStats[name] = [];
+                serviceStats[name].push(ip);
+            });
+
+            const services = Object.keys(serviceStats).sort();
+            if (services.length === 0) {
+                content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No custom services grouped</div>';
+                return;
+            }
+
+            services.forEach(name => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '12px';
+                div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                div.innerHTML = `
+                    <div>
+                        <span style="color: #fbbf24; font-weight: 600;">${name}</span>
+                        <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 4px;">${serviceStats[name].length} IPs blocked</div>
+                    </div>
+                    <button onclick="switchTab('ips'); ipFilter='${name}'; renderBlacklist();" class="btn-hide" style="padding: 5px 12px; font-size: 0.7rem;">VIEW IPS</button>
+                `;
+                content.appendChild(div);
+            });
+        }
+
+        function renderIpsTab() {
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '';
+
+            let ips = blacklistData.ips;
+            if (ipFilter) {
+                ips = ips.filter(ip => {
+                    const name = blacklistData.custom_services[ip] || 'Unlabeled IPs';
+                    return name === ipFilter;
+                });
+            }
+
+            if (ips.length === 0) {
+                content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No IPs to show</div>';
+                return;
+            }
+
+            if (ipFilter) {
+                const header = document.createElement('div');
+                header.style.padding = '10px';
+                header.style.marginBottom = '10px';
+                header.style.background = 'rgba(99, 102, 241, 0.05)';
+                header.style.borderRadius = '8px';
+                header.style.fontSize = '0.8rem';
+                header.style.display = 'flex';
+                header.style.justifyContent = 'space-between';
+                header.innerHTML = `
+                    <span>Filtering by: <b style="color: #fbbf24;">${ipFilter}</b></span>
+                    <a href="#" onclick="ipFilter=null; renderBlacklist(); return false;" style="color: #6366f1; text-decoration: none;">Clear Filter</a>
+                `;
+                content.appendChild(header);
+            }
+
+            ips.forEach(ip => {
+                const isSelected = selectedBlacklistItems.has(ip);
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '10px';
+                const serviceName = blacklistData.custom_services[ip] || '';
+                div.innerHTML = `
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                               onchange="toggleBlacklistItem('${ip}')" 
+                               style="margin-right: 15px; width: 18px; height: 18px; cursor: pointer;">
+                        <div>
+                            <span class="mono" style="font-size: 0.9rem;">${ip}</span>
+                            ${serviceName ? `<span style="color: #fbbf24; font-size: 0.7rem; margin-left: 10px;">(${serviceName})</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="labelBlock('${ip}')" class="btn-hide" style="padding: 5px 10px; font-size: 0.6rem;">LABEL</button>
+                        <button onclick="quickAction('unblock', '${ip}'); setTimeout(openBlocks, 500);" class="btn-unblock" style="padding: 5px 10px; font-size: 0.6rem;">UNBLOCK</button>
+                    </div>
+                `;
+                content.appendChild(div);
+            });
+            updateBatchButton();
+        }
+
+        function toggleBlacklistItem(value) {
+            if (selectedBlacklistItems.has(value)) {
+                selectedBlacklistItems.delete(value);
+            } else {
+                selectedBlacklistItems.add(value);
+            }
+            updateBatchButton();
+        }
+
+        function updateBatchButton() {
+            const btn = document.getElementById('batch-label-btn');
+            if (selectedBlacklistItems.size > 1) {
+                btn.style.display = 'block';
+                btn.innerText = `BATCH LABEL (${selectedBlacklistItems.size})`;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function batchLabel() {
+            if (selectedBlacklistItems.size < 2) return;
+            const name = prompt(`Assign ${selectedBlacklistItems.size} IPs to service name:`, "");
+            if (!name) return;
+
+            await fetch('/api/batch_label', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targets: Array.from(selectedBlacklistItems),
+                    service_name: name
+                })
+            });
+
+            openBlocks();
+            fetchStats();
+        }
+
+        async function labelBlock(target) {
+            const name = prompt("Enter a service name for this IP:", "");
+            if (name === null) return;
+            await quickAction('block', target, name);
+            openBlocks();
+        }
+
+        function closeBlocks() {
+            document.getElementById('block-modal').style.display = 'none';
+        }
+
+        async function clearBlacklist() {
+            if (!confirm("Are you sure you want to clear ALL blocks?")) return;
+            await fetch('/api/clear_blacklist', { method: 'POST' });
+            openBlocks();
+            fetchStats();
+        }
+
+        // Reset normal traffic - ALSO resets eBPF hashmap (affects both tabs)
+        async function resetStats() {
+            if (!confirm("Reset ALL traffic counters?\n(This will reset the eBPF backend hashmap and affect both normal and malicious traffic)")) return;
+            
+            // Reset eBPF backend hashmap (affects all traffic)
+            await fetch('/api/reset', { method: 'POST' });
+            
+            // Clear normal-specific hashmaps/sets
+            normalFlowsCache.clear();
+            normalHiddenItems.clear();
+            normalExpandedServices.clear();
+            
+            // Also clear malicious hashmaps since backend is reset
+            maliciousFlowsCache.clear();
+            maliciousHiddenItems.clear();
+            
+            // Reset shared references to normal hashmaps
+            hiddenItems = normalHiddenItems;
+            expandedServices = normalExpandedServices;
+            
+            // Clear normal-specific UI
+            const body = document.getElementById('stats-body');
+            if (body) body.innerHTML = '';
+            document.getElementById('hidden-count').innerText = '0 Hidden';
+            
+            // Force re-render of both tabs
+            fetchStats();
+            if (isMaliciousTabActive) {
+                fetchMaliciousStats();
+            }
+            console.log('eBPF hashmap reset - all traffic counters cleared');
+        }
+
+        async function action(type) {
+            const target = document.getElementById('target-input').value;
+            if (!target) return;
+            await quickAction(type, target);
+            document.getElementById('target-input').value = '';
+        }
+
+        async function handleBlock(status, target) {
+            if (status === 'PASS') {
+                const name = prompt("Enter a service name for this block (optional):", "");
+                await quickAction('block', target, name);
+            } else {
+                await quickAction('unblock', target);
+            }
+        }
+
+        async function quickAction(type, target, serviceName = null) {
+            const body = { target };
+            if (serviceName) body.service_name = serviceName;
+
+            await fetch(`/api/${type}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            fetchStats();
+        }
+
+        // Hide overlay after first successful load or timeout
+        setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay && overlay.style.display !== 'none') {
+                overlay.style.display = 'none';
+                console.log('Overlay hidden by timeout');
+            }
+        }, 3000); // Force hide after 3 seconds
+        
+        setInterval(() => {
+            fetchStats();
+            // Also refresh malicious tab if active
+            if (isMaliciousTabActive) {
+                fetchMaliciousStats();
+            }
+        }, 1000);
+        fetchStats();
+
+        // OWASP Attack Classification Patterns - Enhanced for traffic analysis
+        const OWASP_PATTERNS = {
+            injection: {
+                name: 'Injection',
+                class: 'owasp-injection',
+                icon: '💉',
+                patterns: [
+                    /login.*=.*'.*or/i,
+                    /search.*=.*'.*--/i,
+                    /user.*=.*union.*select/i,
+                    /query.*=.*drop.*table/i,
+                    /api.*=.*and.*or.*=/i,
+                    /data.*=.*'.*or.*'.*=/i,
+                    /id.*=.*\d+'/i,
+                    /sql|injection|union|select.*from/i
+                ]
+            },
+            xss: {
+                name: 'XSS',
+                class: 'owasp-xss',
+                icon: '🌐',
+                patterns: [
+                    /comment.*script/i,
+                    /profile.*img.*onerror/i,
+                    /post.*svg.*onload/i,
+                    /feedback.*iframe/i,
+                    /input.*body.*onload/i,
+                    /xss|script|alert|javascript/i
+                ]
+            },
+            traversal: {
+                name: 'Path Traversal',
+                class: 'owasp-traversal',
+                icon: '📁',
+                patterns: [
+                    /download.*etc.*passwd/i,
+                    /view.*etc.*shadow/i,
+                    /file.*windows.*system32/i,
+                    /include.*proc.*environ/i,
+                    /read.*\.{2,}/i,
+                    /path|traversal|\.\.\/|etc\/passwd/i
+                ]
+            },
+            rce: {
+                name: 'RCE / Command Inj',
+                class: 'owasp-rce',
+                icon: '⚡',
+                patterns: [
+                    /ping.*cat.*passwd/i,
+                    /exec.*whoami/i,
+                    /dns.*id/i,
+                    /lookup.*ls/i,
+                    /run.*command/i,
+                    /rce|command|exec|ping.*;|cmd/i
+                ]
+            },
+            brute: {
+                name: 'Brute Force',
+                class: 'owasp-brute',
+                icon: '🔐',
+                patterns: [
+                    /login.*username.*password/i,
+                    /auth.*admin.*password/i,
+                    /signin.*user.*pass/i,
+                    /brute|force.*login|attempt.*password/i
+                ]
+            },
+            scan: {
+                name: 'Port Scanning',
+                class: 'owasp-scan',
+                icon: '🔍',
+                patterns: [
+                    /nmap|scan.*port|probe.*\d+/i,
+                    /syn.*scan|connect.*scan/i
+                ]
+            }
+        };
+
+        // Port-based detection - classify by destination port
+        function classifyOWASPAttack(serviceName, flow) {
+            if (!serviceName || !flow) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+            
+            const src = flow.src || '';
+            const dst = flow.dst || '';
+            const pkts = flow.pkts || 0;
+            
+            // Only classify internal attack traffic
+            const isInternalAttackTraffic = (
+                (src === '192.168.0.113' && dst === '192.168.0.160') ||
+                (src === '192.168.0.160' && dst === '192.168.0.113')
+            );
+            
+            if (!isInternalAttackTraffic || pkts < 5) {
+                return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+            }
+            
+            // Get destination port from service name or flow
+            // Service names may include port like "192.168.0.160:8081" or just "Local-Network"
+            const serviceLower = serviceName.toLowerCase();
+            
+            // Port-based classification for multi-port attack servers
+            if (serviceLower.includes(':8081') || /sql|injection|query|select|union/.test(serviceLower)) {
+                return { category: 'injection', name: 'SQL Injection', class: 'owasp-injection', icon: '💉' };
+            }
+            
+            if (serviceLower.includes(':8082') || /xss|script|alert|comment/.test(serviceLower)) {
+                return { category: 'xss', name: 'XSS Attack', class: 'owasp-xss', icon: '🌐' };
+            }
+            
+            if (serviceLower.includes(':8083') || /traversal|path|download|file|\.\./.test(serviceLower)) {
+                return { category: 'traversal', name: 'Path Traversal', class: 'owasp-traversal', icon: '📁' };
+            }
+            
+            if (serviceLower.includes(':8084') || /command|rce|exec|ping|cmd/.test(serviceLower)) {
+                return { category: 'rce', name: 'Command Injection', class: 'owasp-rce', icon: '⚡' };
+            }
+            
+            if (serviceLower.includes(':8085') || /brute|force|auth|password/.test(serviceLower)) {
+                return { category: 'brute', name: 'Brute Force', class: 'owasp-brute', icon: '🔐' };
+            }
+            
+            if (serviceLower.includes(':8086') || /scan|port|probe|nmap/.test(serviceLower)) {
+                return { category: 'scan', name: 'Port Scan', class: 'owasp-scan', icon: '🔍' };
+            }
+            
+            // Fallback: high volume internal traffic
+            if (pkts > 500) {
+                return { category: 'injection', name: 'High Volume Attack', class: 'owasp-injection', icon: '💉' };
+            }
+            
+            return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+        }
+
+        // Malicious Traffic Tab Functions
+        function fetchMaliciousStats() {
+            fetch('/api/stats')
+                .then(res => res.json())
+                .then(data => renderMaliciousTable(data))
+                .catch(e => console.error("Fetch error:", e));
+        }
+
+        function renderMaliciousTable(data) {
+            const body = document.getElementById('malicious-stats-body');
+            if (!body) return;
+            
+            fetch('/api/blacklist')
+                .then(res => res.json())
+                .then(blacklistData => {
+                    const customServices = blacklistData.custom_services || {};
+                    const maliciousFlows = [];
+                    const categoryCounts = { injection: 0, xss: 0, traversal: 0, rce: 0, brute: 0, scan: 0, unknown: 0 };
+                    
+                    // Collect all malicious flows
+                    data.forEach(service => {
+                        if (service.details) {
+                            service.details.forEach(flow => {
+                                // Only classify based on behavioral patterns, NOT labels
+                                // This prevents showing legitimate outbound traffic as malicious
+                                const attackInfo = classifyOWASPAttack(service.service, flow);
+                                
+                                // Only include if it's actually an attack based on behavior
+                                if (attackInfo.category !== 'unknown') {
+                                    categoryCounts[attackInfo.category]++;
+                                    
+                                    // Create unique ID for this flow
+                                    const flowId = `${flow.src}-${flow.dst}-${flow.proto}`;
+                                    
+                                    maliciousFlows.push({
+                                        id: flowId,
+                                        flow,
+                                        attackInfo,
+                                        service
+                                    });
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Calculate malicious traffic totals (separate from normal traffic)
+                    let totalMaliciousPkts = 0;
+                    let totalMaliciousBytes = 0;
+                    const uniqueSources = new Set();
+                    
+                    maliciousFlows.forEach(({ flow }) => {
+                        totalMaliciousPkts += flow.pkts || 0;
+                        totalMaliciousBytes += flow.bytes || 0;
+                        uniqueSources.add(flow.src);
+                    });
+                    
+                    // Update malicious-specific counters (independent from normal traffic)
+                    document.getElementById('malicious-total-flows').innerText = maliciousFlows.length;
+                    document.getElementById('malicious-total-pkts').innerText = totalMaliciousPkts.toLocaleString();
+                    document.getElementById('malicious-total-bytes').innerText = formatBytes(totalMaliciousBytes);
+                    document.getElementById('malicious-unique-src').innerText = uniqueSources.size;
+                    
+                    // Update category stats
+                    document.getElementById('stat-injection').innerText = categoryCounts.injection;
+                    document.getElementById('stat-xss').innerText = categoryCounts.xss;
+                    document.getElementById('stat-traversal').innerText = categoryCounts.traversal;
+                    document.getElementById('stat-rce').innerText = categoryCounts.rce;
+                    document.getElementById('stat-brute').innerText = categoryCounts.brute;
+                    document.getElementById('stat-scan').innerText = categoryCounts.scan;
+                    
+                    // Update main badge
+                    const countBadge = document.getElementById('malicious-count');
+                    const maliciousCount = maliciousFlows.length;
+                    if (countBadge) {
+                        countBadge.innerText = maliciousCount;
+                        countBadge.style.display = maliciousCount > 0 ? 'inline-block' : 'none';
+                    }
+                    
+                    // Handle empty state - just clear the table, no message
+                    if (maliciousCount === 0) {
+                        // Remove all existing rows
+                        Array.from(body.children).forEach(row => row.remove());
+                        return;
+                    }
+                    
+                    // Sort by attack category
+                    maliciousFlows.sort((a, b) => a.attackInfo.category.localeCompare(b.attackInfo.category));
+                    
+                    // Track which rows we've updated using malicious-specific cache
+                    const updatedIds = new Set();
+                    maliciousFlowsCache.clear(); // Reset and rebuild
+                    
+                    // Update or create rows
+                    maliciousFlows.forEach(({ id, flow, attackInfo, service }, index) => {
+                        updatedIds.add(id);
+                        let row = document.getElementById(`malicious-row-${id}`);
+                        const displayService = service.service;
+                        
+                        if (!row) {
+                            // Create new row
+                            row = document.createElement('tr');
+                            row.id = `malicious-row-${id}`;
+                            row.style.background = 'rgba(239, 68, 68, 0.05)';
+                            row.style.borderLeft = '3px solid #ef4444';
+                            row.innerHTML = `
+                                <td>
+                                    <span class="owasp-category ${attackInfo.class}">
+                                        ${attackInfo.icon} ${attackInfo.name}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="mono" style="font-size: 0.8rem; color: #fbbf24;">${service.service || 'Unknown'}</div>
+                                </td>
+                                <td>
+                                    <div class="mono">${flow.src}</div>
+                                    <div class="host">${displayService}</div>
+                                </td>
+                                <td class="mono">${flow.dst}</td>
+                                <td class="col-pps" style="text-align: right; color: #ef4444; font-weight: 600;">${flow.pps || 0}</td>
+                                <td class="col-pkts" style="text-align: right; font-weight: 800;">${flow.pkts ? flow.pkts.toLocaleString() : 0}</td>
+                                <td class="col-bytes" style="text-align: right; color: #60a5fa;">${formatBytes(flow.bytes)}</td>
+                                <td style="text-align: center;">
+                                    <button onclick="quickAction('block', '${flow.src}')" 
+                                            class="btn-block" style="padding: 5px 12px; font-size: 0.7rem;">
+                                        BLOCK
+                                    </button>
+                                </td>
+                            `;
+                            body.appendChild(row);
+                        } else {
+                            // Update only changed values (no visual flash)
+                            const ppsCell = row.querySelector('.col-pps');
+                            const pktsCell = row.querySelector('.col-pkts');
+                            const bytesCell = row.querySelector('.col-bytes');
+                            
+                            if (ppsCell) ppsCell.innerText = flow.pps || 0;
+                            if (pktsCell) pktsCell.innerText = flow.pkts ? flow.pkts.toLocaleString() : 0;
+                            if (bytesCell) bytesCell.innerText = formatBytes(flow.bytes);
+                        }
+                    });
+                    
+                    // Remove rows that no longer exist (but preserve if data is just empty)
+                    Array.from(body.children).forEach(row => {
+                        if (row.id && !updatedIds.has(row.id.replace('malicious-row-', ''))) {
+                            row.remove();
+                        }
+                    });
+                });
+        }
+
+        // Track if we're on malicious tab
+        let isMaliciousTabActive = false;
+        let maliciousRefreshInterval = null;
+        
+
+
+        // Reset ONLY malicious traffic counters (separate from normal traffic)
+        function resetMaliciousCounters() {
+            if (!confirm("Reset MALICIOUS traffic counters?\n(Normal traffic counters will NOT be affected)")) return;
+            
+            // Reset counters visually
+            document.getElementById('stat-injection').innerText = '0';
+            document.getElementById('stat-xss').innerText = '0';
+            document.getElementById('stat-traversal').innerText = '0';
+            document.getElementById('stat-rce').innerText = '0';
+            document.getElementById('stat-brute').innerText = '0';
+            document.getElementById('stat-scan').innerText = '0';
+            document.getElementById('malicious-count').innerText = '0';
+            document.getElementById('malicious-count').style.display = 'none';
+            
+            // Clear the table
+            const body = document.getElementById('malicious-stats-body');
+            Array.from(body.children).forEach(row => row.remove());
+            
+            // Note: NO API call here - we only reset UI counters
+            // Normal traffic counters in eBPF are NOT affected
+            console.log('Malicious counters reset (normal traffic unaffected)');
+            
+            // Refresh after a short delay to show empty state
+            setTimeout(fetchMaliciousStats, 500);
+        }
+
+        function switchDashboardTab(tab) {
+            const mainDash = document.getElementById('main-dashboard');
+            const maliciousDash = document.getElementById('malicious-dashboard');
+            const tabMain = document.getElementById('tab-main');
+            const tabMalicious = document.getElementById('tab-malicious');
+            
+            // Clear existing intervals
+            if (maliciousRefreshInterval) {
+                clearInterval(maliciousRefreshInterval);
+                maliciousRefreshInterval = null;
+            }
+            
+            // Switch hashmap context based on tab
+            if (tab === 'main') {
+                // Use normal hashmaps
+                hiddenItems = normalHiddenItems;
+                expandedServices = normalExpandedServices;
+            } else if (tab === 'malicious') {
+                // Use malicious hashmaps
+                hiddenItems = maliciousHiddenItems;
+                // expandedServices not used in malicious tab
+            }
+            
+            if (tab === 'main') {
+                isMaliciousTabActive = false;
+                mainDash.style.display = 'block';
+                maliciousDash.style.display = 'none';
+                tabMain.classList.add('active');
+                tabMalicious.classList.remove('active');
+                fetchStats();
+            } else if (tab === 'malicious') {
+                isMaliciousTabActive = true;
+                mainDash.style.display = 'none';
+                maliciousDash.style.display = 'block';
+                tabMain.classList.remove('active');
+                tabMalicious.classList.add('active');
+                fetchMaliciousStats();
+                
+                // Start live updates for malicious tab
+                maliciousRefreshInterval = setInterval(() => {
+                    if (isMaliciousTabActive) {
+                        fetchMaliciousStats();
+                    }
+                }, 1000);
+            }
+        }
+    </script>
+
+    <!-- Malicious Traffic Dashboard -->
+    <div id="malicious-dashboard" class="container text-center">
+        <header class="malicious-header">
+            <div>
+                <h1 style="background: linear-gradient(135deg, #fff, #ef4444); -webkit-background-clip: text;">🚨 OWASP THREAT DETECTION</h1>
+                <div style="font-size: 0.8rem; color: #ef4444;">Real-time Attack Classification & Monitoring</div>
+            </div>
+            <div class="controls">
+                <button class="btn-hide" onclick="switchDashboardTab('main')" style="margin-right: 10px;">
+                    ← Back to Main
+                </button>
+                <button class="btn-block" onclick="fetchMaliciousStats()" style="margin-right: 10px;">
+                    🔄 Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Controls for malicious tab -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <button class="btn-hide" onclick="resetMaliciousCounters()" style="margin-right: 10px;">
+                🔄 RESET COUNTERS
+            </button>
+        </div>
+
+        <!-- Malicious Traffic Summary Counters -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0;">
+            <div class="owasp-stat-card" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-flows" style="color: #f87171;">0</div>
+                <div class="owasp-stat-label">Threat Flows</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-pkts" style="color: #fbbf24;">0</div>
+                <div class="owasp-stat-label">Attack Packets</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-bytes" style="color: #818cf8;">0</div>
+                <div class="owasp-stat-label">Data Volume</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);">
+                <div class="owasp-stat-value" id="malicious-unique-src" style="color: #34d399;">0</div>
+                <div class="owasp-stat-label">Attack Sources</div>
+            </div>
+        </div>
+
+        <!-- OWASP Category Stats -->
+        <div class="owasp-stats-grid">
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-injection" style="color: #f87171;">0</div>
+                <div class="owasp-stat-label">Injection Attacks</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-xss" style="color: #fbbf24;">0</div>
+                <div class="owasp-stat-label">XSS Attacks</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-traversal" style="color: #818cf8;">0</div>
+                <div class="owasp-stat-label">Path Traversal</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-rce" style="color: #f472b6;">0</div>
+                <div class="owasp-stat-label">RCE / Command Inj</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-brute" style="color: #34d399;">0</div>
+                <div class="owasp-stat-label">Brute Force</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-scan" style="color: #22d3ee;">0</div>
+                <div class="owasp-stat-label">Port Scanning</div>
+            </div>
+        </div>
+
+        <table id="malicious-stats-table">
+            <thead>
+                <tr>
+                    <th>OWASP Category</th>
+                    <th>Attack Type</th>
+                    <th>Source</th>
+                    <th>Destination</th>
+                    <th style="text-align: right;">PPS</th>
+                    <th style="text-align: right;">Packets</th>
+                    <th style="text-align: right;">Bytes</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="malicious-stats-body"></tbody>
+        </table>
+    </div>
+
+</body>
+
+</html>

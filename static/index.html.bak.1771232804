@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlueWall Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #6366f1;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --text: #f8fafc;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff, #6366f1);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #hidden-count {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #hidden-count:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: inherit;
+            min-width: 250px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-block {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-unblock {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-hide {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border: 1px solid var(--glass-border);
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        th {
+            text-align: left;
+            padding: 15px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        tr {
+            background: var(--glass);
+            transition: transform 0.2s;
+        }
+
+        tr:hover {
+            transform: scale(1.005);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        td {
+            padding: 15px;
+            border-top: 1px solid var(--glass-border);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        td:first-child {
+            border-left: 1px solid var(--glass-border);
+            border-radius: 12px 0 0 12px;
+        }
+
+        td:last-child {
+            border-right: 1px solid var(--glass-border);
+            border-radius: 0 12px 12px 0;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-pass {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .badge-block {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .host {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-weight: 800;
+            font-size: 2rem;
+        }
+
+        /* Modal for hidden rows */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #16161a;
+            border: 1px solid var(--glass-border);
+            padding: 30px;
+            border-radius: 20px;
+            z-index: 2000;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            min-width: 500px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-weight: 600;
+            padding: 5px 15px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+
+        .tab-btn.active {
+            color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">INITIALIZING BLUEWALL...</div>
+
+    <div id="hidden-modal" class="modal">
+        <h3 style="margin-top: 0;">Hidden Items</h3>
+        <div id="hidden-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
+        <button onclick="closeHidden()" style="background: var(--glass); color: white; width: 100%;">Close</button>
+    </div>
+
+    <div id="block-modal" class="modal">
+        <h3 style="margin-top: 0; color: var(--danger);">Blacklist Manager</h3>
+        <div class="tab-nav">
+            <button id="tab-services" class="tab-btn active" onclick="switchTab('services')">SERVICES</button>
+            <button id="tab-ips" class="tab-btn" onclick="switchTab('ips')">IP DETAILS</button>
+        </div>
+        <div id="block-list-content" style="margin-bottom: 20px; max-height: 400px; overflow-y: auto;"></div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button id="batch-label-btn" onclick="batchLabel()" class="btn-hide" style="flex: 1; display: none;">BATCH
+                LABEL</button>
+            <button onclick="clearBlacklist()" class="btn-block" style="flex: 1;">CLEAR ALL BLOCKS</button>
+            <button onclick="closeBlocks()" style="background: var(--glass); color: white; flex: 1;">Close</button>
+        </div>
+    </div>
+
+    <div class="container text-center">
+        <header>
+            <div>
+                <h1>BLUEWALL</h1>
+                <div style="font-size: 0.8rem; color: #6366f1;">Real-time eBPF Buffer Monitoring</div>
+            </div>
+            <div class="controls">
+                <div id="hidden-count" onclick="openHidden()">0 Hidden</div>
+                <button class="btn-hide" onclick="openBlocks()" style="margin-right: 10px;">MANAGE BLOCKS</button>
+                <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;">RESET COUNTERS</button>
+                <input type="text" id="target-input" placeholder="IP Address or Service (e.g. Netflix)">
+                <button class="btn-block" onclick="action('block')">BLOCK</button>
+                <button class="btn-unblock" onclick="action('unblock')">UNBLOCK</button>
+            </div>
+        </header>
+
+        <table id="stats-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th colspan="2">Service</th>
+                    <th colspan="3"></th>
+                    <th style="text-align: right;">PPS</th>
+                    <th style="text-align: right;">BPS</th>
+                    <th style="text-align: right;">Packets</th>
+                    <th style="text-align: right;">Bytes</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let hiddenItems = new Set();
+        let expandedServices = new Set();
+        let selectedBlacklistItems = new Set();
+        let currentTab = 'services';
+        let ipFilter = null;
+        let blacklistData = null;
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                renderTable(data);
+                document.getElementById('loading-overlay').style.display = 'none';
+            } catch (e) {
+                console.error("Fetch error:", e);
+            }
+        }
+
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+        function renderTable(data) {
+            const body = document.getElementById('stats-body');
+            body.innerHTML = '';
+            document.getElementById('hidden-count').innerText = `${hiddenItems.size} Hidden`;
+            
+            data.forEach(service => {
+                // Service summary row
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.style.background = 'var(--glass)';
+                tr.style.borderLeft = '3px solid #6366f1';
+                const isExpanded = expandedServices.has(service.service);
+                tr.innerHTML = `
+                    <td><span class="badge badge-${service.status.toLowerCase()}">${service.status}</span></td>
+                    <td colspan="2">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.2rem; transition: transform 0.2s;" id="icon-${service.service}">${isExpanded ? '▼' : '▶'}</span>
+                            <span style="color: #fbbf24; font-weight: 600; font-size: 1.1rem;">${service.service}</span>
+                            <span style="color: #94a3b8; font-size: 0.8rem;">(${service.flows || 0} flows)</span>
+                        </div>
+                    </td>
+                    <td colspan="3"></td>
+                    <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.pps ? service.pps.toFixed(1) : 0.0}</td>
+                    <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.bps ? service.bps.toFixed(1) : 0.0}</td>
+                    <td style="text-align: right; font-weight: 800; font-size: 1.1rem;">${service.pkts ? service.pkts.toLocaleString() : 0}</td>
+                    <td style="text-align: right; color: #60a5fa; font-weight: 600;">${service.bytes ? formatBytes(service.bytes) : "0 B"}</td>
+                    <td style="text-align: center;">
+                        <button onclick="event.stopPropagation(); blockService('${service.service}')" 
+                                class="btn-${service.status === 'PASS' ? 'block' : 'unblock'}" 
+                                style="padding: 5px 12px; font-size: 0.7rem;">
+                            ${service.status === 'PASS' ? 'BLOCK' : 'UNBLOCK'}
+                        </button>
+                    </td>
+                `;
+                tr.onclick = () => toggleService(service.service);
+                body.appendChild(tr);
+                
+                // Expanded details rows
+                if (isExpanded && service.details) {
+                    service.details.forEach(flow => {
+                        const detailTr = document.createElement('tr');
+                        detailTr.style.background = 'rgba(255, 255, 255, 0.02)';
+                        detailTr.style.fontSize = '0.85rem';
+                        detailTr.innerHTML = `
+                            <td></td>
+                            <td>
+                                <div class="mono">${flow.src}</div>
+                                <div class="host">${flow.host}</div>
+                            </td>
+                            <td></td>
+                            <td class="mono">${flow.dst}</td>
+                            <td>${flow.proto}</td>
+                            <td class="mono">${flow.vlan}</td>
+                            <td style="text-align: right; color: #4ade80;">${flow.pps || 0}</td>
+                            <td style="text-align: right; color: #4ade80;">${flow.bps || 0}</td>
+                            <td style="text-align: right;">${flow.pkts || 0}</td>
+                            <td style="text-align: right; color: #60a5fa;">${flow.bytes ? formatBytes(flow.bytes) : "0 B"}</td>
+                            <td style="text-align: center;">
+                                <button onclick="handleBlock('${flow.status}', '${flow.dst}')" 
+                                        class="btn-${flow.status === 'PASS' ? 'block' : 'unblock'}" 
+                                        style="padding: 3px 8px; font-size: 0.6rem;">
+                                    ${flow.status === 'PASS' ? 'BLOCK' : 'UNBLOCK'}
+                                </button>
+                            </td>
+                        `;
+                        body.appendChild(detailTr);
+                    });
+                }
+            });
+        }
+        
+        function toggleService(serviceName) {
+            if (expandedServices.has(serviceName)) {
+                expandedServices.delete(serviceName);
+            } else {
+                expandedServices.add(serviceName);
+            }
+            fetchStats();
+        }
+        
+        function blockService(serviceName) {
+            // Block all IPs in this service
+            alert('Block all flows for ' + serviceName);
+        }
+
+        function hideItem(key) {
+            hiddenItems.add(key);
+            fetchStats();
+        }
+
+        function openHidden() {
+            const list = document.getElementById('hidden-list');
+            list.innerHTML = '';
+            if (hiddenItems.size === 0) {
+                list.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No items hidden</div>';
+            }
+            hiddenItems.forEach(key => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '10px';
+                div.style.borderBottom = '1px solid var(--glass-border)';
+                div.innerHTML = `
+                    <span class="mono" style="font-size: 0.8rem;">${key}</span>
+                    <button onclick="unhideItem('${key}')" class="btn-unblock" style="padding: 5px 10px; font-size: 0.6rem;">RESTORE</button>
+                `;
+                list.appendChild(div);
+            });
+            document.getElementById('hidden-modal').style.display = 'block';
+        }
+
+        function closeHidden() {
+            document.getElementById('hidden-modal').style.display = 'none';
+        }
+
+        function unhideItem(key) {
+            hiddenItems.delete(key);
+            openHidden();
+            fetchStats();
+        }
+
+        async function openBlocks(filter = null) {
+            ipFilter = filter;
+            selectedBlacklistItems.clear();
+            updateBatchButton();
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">Loading...</div>';
+            document.getElementById('block-modal').style.display = 'block';
+
+            try {
+                const res = await fetch('/api/blacklist');
+                blacklistData = await res.json();
+                renderBlacklist();
+            } catch (e) {
+                content.innerHTML = '<div style="color: var(--danger);">Failed to load blacklist</div>';
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            if (tab === 'services') ipFilter = null;
+            document.getElementById('tab-services').classList.toggle('active', tab === 'services');
+            document.getElementById('tab-ips').classList.toggle('active', tab === 'ips');
+            renderBlacklist();
+        }
+
+        function renderBlacklist() {
+            if (!blacklistData) return;
+            if (currentTab === 'services') {
+                renderServicesTab();
+            } else {
+                renderIpsTab();
+            }
+        }
+
+        function renderServicesTab() {
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '';
+
+            const serviceStats = {};
+            blacklistData.ips.forEach(ip => {
+                const name = blacklistData.custom_services[ip] || 'Unlabeled IPs';
+                if (!serviceStats[name]) serviceStats[name] = [];
+                serviceStats[name].push(ip);
+            });
+
+            const services = Object.keys(serviceStats).sort();
+            if (services.length === 0) {
+                content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No custom services grouped</div>';
+                return;
+            }
+
+            services.forEach(name => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '12px';
+                div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                div.innerHTML = `
+                    <div>
+                        <span style="color: #fbbf24; font-weight: 600;">${name}</span>
+                        <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 4px;">${serviceStats[name].length} IPs blocked</div>
+                    </div>
+                    <button onclick="switchTab('ips'); ipFilter='${name}'; renderBlacklist();" class="btn-hide" style="padding: 5px 12px; font-size: 0.7rem;">VIEW IPS</button>
+                `;
+                content.appendChild(div);
+            });
+        }
+
+        function renderIpsTab() {
+            const content = document.getElementById('block-list-content');
+            content.innerHTML = '';
+
+            let ips = blacklistData.ips;
+            if (ipFilter) {
+                ips = ips.filter(ip => {
+                    const name = blacklistData.custom_services[ip] || 'Unlabeled IPs';
+                    return name === ipFilter;
+                });
+            }
+
+            if (ips.length === 0) {
+                content.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No IPs to show</div>';
+                return;
+            }
+
+            if (ipFilter) {
+                const header = document.createElement('div');
+                header.style.padding = '10px';
+                header.style.marginBottom = '10px';
+                header.style.background = 'rgba(99, 102, 241, 0.05)';
+                header.style.borderRadius = '8px';
+                header.style.fontSize = '0.8rem';
+                header.style.display = 'flex';
+                header.style.justifyContent = 'space-between';
+                header.innerHTML = `
+                    <span>Filtering by: <b style="color: #fbbf24;">${ipFilter}</b></span>
+                    <a href="#" onclick="ipFilter=null; renderBlacklist(); return false;" style="color: #6366f1; text-decoration: none;">Clear Filter</a>
+                `;
+                content.appendChild(header);
+            }
+
+            ips.forEach(ip => {
+                const isSelected = selectedBlacklistItems.has(ip);
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '10px';
+                const serviceName = blacklistData.custom_services[ip] || '';
+                div.innerHTML = `
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                               onchange="toggleBlacklistItem('${ip}')" 
+                               style="margin-right: 15px; width: 18px; height: 18px; cursor: pointer;">
+                        <div>
+                            <span class="mono" style="font-size: 0.9rem;">${ip}</span>
+                            ${serviceName ? `<span style="color: #fbbf24; font-size: 0.7rem; margin-left: 10px;">(${serviceName})</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="labelBlock('${ip}')" class="btn-hide" style="padding: 5px 10px; font-size: 0.6rem;">LABEL</button>
+                        <button onclick="quickAction('unblock', '${ip}'); setTimeout(openBlocks, 500);" class="btn-unblock" style="padding: 5px 10px; font-size: 0.6rem;">UNBLOCK</button>
+                    </div>
+                `;
+                content.appendChild(div);
+            });
+            updateBatchButton();
+        }
+
+        function toggleBlacklistItem(value) {
+            if (selectedBlacklistItems.has(value)) {
+                selectedBlacklistItems.delete(value);
+            } else {
+                selectedBlacklistItems.add(value);
+            }
+            updateBatchButton();
+        }
+
+        function updateBatchButton() {
+            const btn = document.getElementById('batch-label-btn');
+            if (selectedBlacklistItems.size > 1) {
+                btn.style.display = 'block';
+                btn.innerText = `BATCH LABEL (${selectedBlacklistItems.size})`;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function batchLabel() {
+            if (selectedBlacklistItems.size < 2) return;
+            const name = prompt(`Assign ${selectedBlacklistItems.size} IPs to service name:`, "");
+            if (!name) return;
+
+            await fetch('/api/batch_label', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targets: Array.from(selectedBlacklistItems),
+                    service_name: name
+                })
+            });
+
+            openBlocks();
+            fetchStats();
+        }
+
+        async function labelBlock(target) {
+            const name = prompt("Enter a service name for this IP:", "");
+            if (name === null) return;
+            await quickAction('block', target, name);
+            openBlocks();
+        }
+
+        function closeBlocks() {
+            document.getElementById('block-modal').style.display = 'none';
+        }
+
+        async function clearBlacklist() {
+            if (!confirm("Are you sure you want to clear ALL blocks?")) return;
+            await fetch('/api/clear_blacklist', { method: 'POST' });
+            openBlocks();
+            fetchStats();
+        }
+
+        async function resetStats() {
+            if (!confirm("Are you sure you want to reset all traffic counters?")) return;
+            await fetch('/api/reset', { method: 'POST' });
+            fetchStats();
+        }
+
+        async function action(type) {
+            const target = document.getElementById('target-input').value;
+            if (!target) return;
+            await quickAction(type, target);
+            document.getElementById('target-input').value = '';
+        }
+
+        async function handleBlock(status, target) {
+            if (status === 'PASS') {
+                const name = prompt("Enter a service name for this block (optional):", "");
+                await quickAction('block', target, name);
+            } else {
+                await quickAction('unblock', target);
+            }
+        }
+
+        async function quickAction(type, target, serviceName = null) {
+            const body = { target };
+            if (serviceName) body.service_name = serviceName;
+
+            await fetch(`/api/${type}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            fetchStats();
+        }
+
+        setInterval(fetchStats, 1000);
+        fetchStats();
+    </script>
+</body>
+
+</html>
