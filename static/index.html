@@ -1120,12 +1120,12 @@ function formatBytes(bytes) {
             const body = document.getElementById('malicious-stats-body');
             Array.from(body.children).forEach(row => row.remove());
             
-            // Call API reset
-            fetch('/api/reset', { method: 'POST' })
-                .then(() => {
-                    console.log('Counters reset');
-                    setTimeout(fetchMaliciousStats, 500);
-                });
+            // Note: NO API call here - we only reset UI counters
+            // Normal traffic counters in eBPF are NOT affected
+            console.log('Malicious counters reset (normal traffic unaffected)');
+            
+            // Refresh after a short delay to show empty state
+            setTimeout(fetchMaliciousStats, 500);
         }
 
         function switchDashboardTab(tab) {
