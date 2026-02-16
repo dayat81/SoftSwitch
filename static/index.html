@@ -982,7 +982,24 @@ function formatBytes(bytes) {
                         }
                     });
                     
-                    // Update category stats (no blink - just text update)
+                    // Calculate malicious traffic totals (separate from normal traffic)
+                    let totalMaliciousPkts = 0;
+                    let totalMaliciousBytes = 0;
+                    const uniqueSources = new Set();
+                    
+                    maliciousFlows.forEach(({ flow }) => {
+                        totalMaliciousPkts += flow.pkts || 0;
+                        totalMaliciousBytes += flow.bytes || 0;
+                        uniqueSources.add(flow.src);
+                    });
+                    
+                    // Update malicious-specific counters (independent from normal traffic)
+                    document.getElementById('malicious-total-flows').innerText = maliciousFlows.length;
+                    document.getElementById('malicious-total-pkts').innerText = totalMaliciousPkts.toLocaleString();
+                    document.getElementById('malicious-total-bytes').innerText = formatBytes(totalMaliciousBytes);
+                    document.getElementById('malicious-unique-src').innerText = uniqueSources.size;
+                    
+                    // Update category stats
                     document.getElementById('stat-injection').innerText = categoryCounts.injection;
                     document.getElementById('stat-xss').innerText = categoryCounts.xss;
                     document.getElementById('stat-traversal').innerText = categoryCounts.traversal;
@@ -1158,6 +1175,26 @@ function formatBytes(bytes) {
             <button class="btn-hide" onclick="resetMaliciousCounters()" style="margin-right: 10px;">
                 🔄 RESET COUNTERS
             </button>
+        </div>
+
+        <!-- Malicious Traffic Summary Counters -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0;">
+            <div class="owasp-stat-card" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-flows" style="color: #f87171;">0</div>
+                <div class="owasp-stat-label">Threat Flows</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-pkts" style="color: #fbbf24;">0</div>
+                <div class="owasp-stat-label">Attack Packets</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">
+                <div class="owasp-stat-value" id="malicious-total-bytes" style="color: #818cf8;">0</div>
+                <div class="owasp-stat-label">Data Volume</div>
+            </div>
+            <div class="owasp-stat-card" style="background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);">
+                <div class="owasp-stat-value" id="malicious-unique-src" style="color: #34d399;">0</div>
+                <div class="owasp-stat-label">Attack Sources</div>
+            </div>
         </div>
 
         <!-- OWASP Category Stats -->
