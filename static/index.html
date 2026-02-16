@@ -792,12 +792,16 @@ function formatBytes(bytes) {
             normalHiddenItems.clear();
             normalExpandedServices.clear();
             
+            // Reset shared references to normal hashmaps
+            hiddenItems = normalHiddenItems;
+            expandedServices = normalExpandedServices;
+            
             // Clear normal-specific UI
             const body = document.getElementById('stats-body');
             if (body) body.innerHTML = '';
             document.getElementById('hidden-count').innerText = '0 Hidden';
             
-            // Re-fetch to populate fresh
+            // Force re-render
             fetchStats();
             console.log('Normal traffic data reset (malicious unaffected)');
         }
