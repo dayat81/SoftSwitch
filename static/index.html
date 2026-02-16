@@ -811,18 +811,21 @@ function formatBytes(bytes) {
         }, 1000);
         fetchStats();
 
-        // OWASP Attack Classification Patterns
+        // OWASP Attack Classification Patterns - Enhanced for traffic analysis
         const OWASP_PATTERNS = {
             injection: {
                 name: 'Injection',
                 class: 'owasp-injection',
                 icon: '💉',
                 patterns: [
-                    /['";].*(OR|AND|UNION|SELECT|INSERT|UPDATE|DELETE|DROP)/i,
-                    /(\%27)|(')|(\-\-)|(\%23)|(#)/i,
-                    /1\s*=\s*1/i,
-                    /admin['\-\-]/i,
-                    /(sql|mysql|postgres|oracle|mssql)/i
+                    /login.*=.*'.*or/i,
+                    /search.*=.*'.*--/i,
+                    /user.*=.*union.*select/i,
+                    /query.*=.*drop.*table/i,
+                    /api.*=.*and.*or.*=/i,
+                    /data.*=.*'.*or.*'.*=/i,
+                    /id.*=.*\d+'/i,
+                    /sql|injection|union|select.*from/i
                 ]
             },
             xss: {
@@ -830,11 +833,12 @@ function formatBytes(bytes) {
                 class: 'owasp-xss',
                 icon: '🌐',
                 patterns: [
-                    /(<script|javascript:|on\w+\s*=)/i,
-                    /(%3C|%3E|alert\(|confirm\(|prompt\()/i,
-                    /<img[^>]+onerror/i,
-                    /<svg[^>]+onload/i,
-                    /<iframe[^>]+src/i
+                    /comment.*script/i,
+                    /profile.*img.*onerror/i,
+                    /post.*svg.*onload/i,
+                    /feedback.*iframe/i,
+                    /input.*body.*onload/i,
+                    /xss|script|alert|javascript/i
                 ]
             },
             traversal: {
@@ -842,11 +846,12 @@ function formatBytes(bytes) {
                 class: 'owasp-traversal',
                 icon: '📁',
                 patterns: [
-                    /\.\.[\/]/i,
-                    /(%2e%2e|\.{2,})/i,
-                    /(etc\/passwd|etc\/shadow|windows\/system32)/i,
-                    /php:\/\/filter|data:\/\//i,
-                    /(\.\.\|\.\.\/){2,}/i
+                    /download.*etc.*passwd/i,
+                    /view.*etc.*shadow/i,
+                    /file.*windows.*system32/i,
+                    /include.*proc.*environ/i,
+                    /read.*\.{2,}/i,
+                    /path|traversal|\.\.\/|etc\/passwd/i
                 ]
             },
             rce: {
@@ -854,10 +859,12 @@ function formatBytes(bytes) {
                 class: 'owasp-rce',
                 icon: '⚡',
                 patterns: [
-                    /(;|\||\&\&|\$\().*(cat|ls|whoami|id|uname|netstat|ping|curl|wget)/i,
-                    /`[^`]+`/,
-                    /\$\([^)]+\)/,
-                    /(cmd|command|exec|system|shell|bash|sh\s+-c)/i
+                    /ping.*cat.*passwd/i,
+                    /exec.*whoami/i,
+                    /dns.*id/i,
+                    /lookup.*ls/i,
+                    /run.*command/i,
+                    /rce|command|exec|ping.*;|cmd/i
                 ]
             },
             brute: {
@@ -865,9 +872,10 @@ function formatBytes(bytes) {
                 class: 'owasp-brute',
                 icon: '🔐',
                 patterns: [
-                    /(login|auth|signin).*password/i,
-                    /(admin|root|test|user|guest).*test[0-9]+/i,
-                    /(brute|force|attempt)/i
+                    /login.*username.*password/i,
+                    /auth.*admin.*password/i,
+                    /signin.*user.*pass/i,
+                    /brute|force.*login|attempt.*password/i
                 ]
             },
             scan: {
@@ -875,31 +883,24 @@ function formatBytes(bytes) {
                 class: 'owasp-scan',
                 icon: '🔍',
                 patterns: [
-                    /nmap|masscan|zmap/i,
-                    /(port|scan|probe).*\d{1,5}/i,
-                    /(syn|connect|ack|fin|null|xmas).*(scan|probe)/i
+                    /nmap|scan.*port|probe.*\d+/i,
+                    /syn.*scan|connect.*scan/i
                 ]
             }
         };
 
-        // Classify attack based on URL patterns
-        function classifyOWASPAttack(url, serviceName) {
-            if (!url) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+        // Classify attack based on service/URL patterns
+        function classifyOWASPAttack(serviceName, host) {
+            if (!serviceName) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
             
-            const urlLower = url.toLowerCase();
-            const serviceLower = (serviceName || '').toLowerCase();
+            const serviceLower = serviceName.toLowerCase();
             
             for (const [key, config] of Object.entries(OWASP_PATTERNS)) {
                 for (const pattern of config.patterns) {
-                    if (pattern.test(urlLower) || pattern.test(serviceLower)) {
+                    if (pattern.test(serviceLower)) {
                         return { category: key, ...config };
                     }
                 }
-            }
-            
-            // Check service name for clues
-            if (serviceLower.includes('malicious') || serviceLower.includes('attacker') || serviceLower.includes('🚨')) {
-                return { category: 'unknown', name: 'Malicious Traffic', class: 'owasp-unknown', icon: '🚨' };
             }
             
             return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
