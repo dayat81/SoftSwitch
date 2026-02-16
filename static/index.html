@@ -889,7 +889,7 @@ function formatBytes(bytes) {
             }
         };
 
-        // Behavioral detection - analyze traffic patterns, not just service names
+        // Behavioral detection - analyze traffic patterns for OWASP attacks
         function classifyOWASPAttack(serviceName, flow) {
             if (!serviceName || !flow) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
             
@@ -898,29 +898,30 @@ function formatBytes(bytes) {
             const dst = flow.dst || '';
             const pkts = flow.pkts || 0;
             const pps = flow.pps || 0;
+            const bytes = flow.bytes || 0;
             
-            // Detect port scanning: high packet rate to multiple destinations from same source
-            // This is detected at service level aggregation
+            // Check for internal attack traffic (both directions)
+            // .113 -> .160 = attack requests
+            // .160 -> .113 = target responses to attacks
+            const isInternalAttackTraffic = (
+                (src === '192.168.0.113' && dst === '192.168.0.160') ||
+                (src === '192.168.0.160' && dst === '192.168.0.113')
+            );
             
-            // Detect brute force: sustained traffic to auth endpoints
-            // Look for patterns in internal network traffic
-            
-            // Check for internal attack traffic (192.168.0.x)
-            const isInternal = src.startsWith('192.168.0.') && dst.startsWith('192.168.0.');
-            const isHighVolume = pkts > 1000 || pps > 50;
-            const isLocalServer = dst === '192.168.0.160';
-            
-            // Classify based on traffic characteristics
-            if (isInternal && isLocalServer) {
-                // Internal attack traffic to raspi0
-                if (isHighVolume) {
-                    // High volume suggests automated attack (brute force, injection attempts)
-                    return { category: 'injection', name: 'Injection', class: 'owasp-injection', icon: '💉' };
+            if (isInternalAttackTraffic) {
+                // High volume attack traffic (both directions)
+                if (pkts > 1000 || pps > 50 || bytes > 500000) {
+                    return { category: 'injection', name: 'Injection Attack', class: 'owasp-injection', icon: '💉' };
                 }
                 
-                // Medium volume - could be scanning or probing
-                if (pkts > 100) {
-                    return { category: 'scan', name: 'Port Scanning', class: 'owasp-scan', icon: '🔍' };
+                // Medium volume - scanning or probing
+                if (pkts > 100 || bytes > 50000) {
+                    return { category: 'scan', name: 'Port Scan/Recon', class: 'owasp-scan', icon: '🔍' };
+                }
+                
+                // Low volume but still internal attack related
+                if (pkts > 10) {
+                    return { category: 'brute', name: 'Brute Force', class: 'owasp-brute', icon: '🔐' };
                 }
             }
             
