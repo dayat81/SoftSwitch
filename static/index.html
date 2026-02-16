@@ -436,8 +436,9 @@
     </div>
 
     <script>
-        let hiddenItems = new Set();
-        let expandedServices = new Set();
+        // Shared references - will point to specific hashmaps based on active tab
+        let hiddenItems = normalHiddenItems;
+        let expandedServices = normalExpandedServices;
         let selectedBlacklistItems = new Set();
         let currentTab = 'services';
         let ipFilter = null;
@@ -466,7 +467,7 @@ function formatBytes(bytes) {
         function renderTable(data) {
             const body = document.getElementById('stats-body');
             body.innerHTML = '';
-            document.getElementById('hidden-count').innerText = `${hiddenItems.size} Hidden`;
+            document.getElementById('hidden-count').innerText = `${normalHiddenItems.size} Hidden`;
             
             data.forEach(service => {
                 // Service summary row
@@ -474,7 +475,7 @@ function formatBytes(bytes) {
                 tr.style.cursor = 'pointer';
                 tr.style.background = 'var(--glass)';
                 tr.style.borderLeft = '3px solid #6366f1';
-                const isExpanded = expandedServices.has(service.service);
+                const isExpanded = normalExpandedServices.has(service.service);
                 tr.innerHTML = `
                     <td><span class="badge badge-${service.status.toLowerCase()}">${service.status}</span></td>
                     <td colspan="2">
@@ -535,10 +536,10 @@ function formatBytes(bytes) {
         }
         
         function toggleService(serviceName) {
-            if (expandedServices.has(serviceName)) {
-                expandedServices.delete(serviceName);
+            if (normalExpandedServices.has(serviceName)) {
+                normalExpandedServices.delete(serviceName);
             } else {
-                expandedServices.add(serviceName);
+                normalExpandedServices.add(serviceName);
             }
             fetchStats();
         }
@@ -549,17 +550,17 @@ function formatBytes(bytes) {
         }
 
         function hideItem(key) {
-            hiddenItems.add(key);
+            normalHiddenItems.add(key);
             fetchStats();
         }
 
         function openHidden() {
             const list = document.getElementById('hidden-list');
             list.innerHTML = '';
-            if (hiddenItems.size === 0) {
+            if (normalHiddenItems.size === 0) {
                 list.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No items hidden</div>';
             }
-            hiddenItems.forEach(key => {
+            normalHiddenItems.forEach(key => {
                 const div = document.createElement('div');
                 div.style.display = 'flex';
                 div.style.justifyContent = 'space-between';
@@ -580,7 +581,7 @@ function formatBytes(bytes) {
         }
 
         function unhideItem(key) {
-            hiddenItems.delete(key);
+            normalHiddenItems.delete(key);
             openHidden();
             fetchStats();
         }
@@ -1047,8 +1048,9 @@ function formatBytes(bytes) {
                     // Sort by attack category
                     maliciousFlows.sort((a, b) => a.attackInfo.category.localeCompare(b.attackInfo.category));
                     
-                    // Track which rows we've updated
+                    // Track which rows we've updated using malicious-specific cache
                     const updatedIds = new Set();
+                    maliciousFlowsCache.clear(); // Reset and rebuild
                     
                     // Update or create rows
                     maliciousFlows.forEach(({ id, flow, attackInfo, service }, index) => {
@@ -1155,6 +1157,17 @@ function formatBytes(bytes) {
             if (maliciousRefreshInterval) {
                 clearInterval(maliciousRefreshInterval);
                 maliciousRefreshInterval = null;
+            }
+            
+            // Switch hashmap context based on tab
+            if (tab === 'main') {
+                // Use normal hashmaps
+                hiddenItems = normalHiddenItems;
+                expandedServices = normalExpandedServices;
+            } else if (tab === 'malicious') {
+                // Use malicious hashmaps
+                hiddenItems = maliciousHiddenItems;
+                // expandedServices not used in malicious tab
             }
             
             if (tab === 'main') {
