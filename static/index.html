@@ -293,6 +293,77 @@
             background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05)) !important;
             border: 1px solid rgba(239, 68, 68, 0.3) !important;
         }
+        /* OWASP Classification Styles */
+        .owasp-category {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .owasp-injection {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .owasp-xss {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .owasp-traversal {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        .owasp-rce {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        .owasp-brute {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .owasp-scan {
+            background: rgba(6, 182, 212, 0.2);
+            color: #22d3ee;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        .owasp-unknown {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .owasp-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .owasp-stat-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .owasp-stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+        .owasp-stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #94a3b8;
+        }
     </style>
 </head>
 
@@ -734,6 +805,100 @@ function formatBytes(bytes) {
         setInterval(fetchStats, 1000);
         fetchStats();
 
+        // OWASP Attack Classification Patterns
+        const OWASP_PATTERNS = {
+            injection: {
+                name: 'Injection',
+                class: 'owasp-injection',
+                icon: '💉',
+                patterns: [
+                    /['";].*(OR|AND|UNION|SELECT|INSERT|UPDATE|DELETE|DROP)/i,
+                    /(\%27)|(')|(\-\-)|(\%23)|(#)/i,
+                    /1\s*=\s*1/i,
+                    /admin['\-\-]/i,
+                    /(sql|mysql|postgres|oracle|mssql)/i
+                ]
+            },
+            xss: {
+                name: 'XSS',
+                class: 'owasp-xss',
+                icon: '🌐',
+                patterns: [
+                    /(<script|javascript:|on\w+\s*=)/i,
+                    /(%3C|%3E|alert\(|confirm\(|prompt\()/i,
+                    /<img[^>]+onerror/i,
+                    /<svg[^>]+onload/i,
+                    /<iframe[^>]+src/i
+                ]
+            },
+            traversal: {
+                name: 'Path Traversal',
+                class: 'owasp-traversal',
+                icon: '📁',
+                patterns: [
+                    /\.\.[\/]/i,
+                    /(%2e%2e|\.{2,})/i,
+                    /(etc\/passwd|etc\/shadow|windows\/system32)/i,
+                    /php:\/\/filter|data:\/\//i,
+                    /(\.\.\|\.\.\/){2,}/i
+                ]
+            },
+            rce: {
+                name: 'RCE / Command Inj',
+                class: 'owasp-rce',
+                icon: '⚡',
+                patterns: [
+                    /(;|\||\&\&|\$\().*(cat|ls|whoami|id|uname|netstat|ping|curl|wget)/i,
+                    /`[^`]+`/,
+                    /\$\([^)]+\)/,
+                    /(cmd|command|exec|system|shell|bash|sh\s+-c)/i
+                ]
+            },
+            brute: {
+                name: 'Brute Force',
+                class: 'owasp-brute',
+                icon: '🔐',
+                patterns: [
+                    /(login|auth|signin).*password/i,
+                    /(admin|root|test|user|guest).*test[0-9]+/i,
+                    /(brute|force|attempt)/i
+                ]
+            },
+            scan: {
+                name: 'Port Scanning',
+                class: 'owasp-scan',
+                icon: '🔍',
+                patterns: [
+                    /nmap|masscan|zmap/i,
+                    /(port|scan|probe).*\d{1,5}/i,
+                    /(syn|connect|ack|fin|null|xmas).*(scan|probe)/i
+                ]
+            }
+        };
+
+        // Classify attack based on URL patterns
+        function classifyOWASPAttack(url, serviceName) {
+            if (!url) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+            
+            const urlLower = url.toLowerCase();
+            const serviceLower = (serviceName || '').toLowerCase();
+            
+            for (const [key, config] of Object.entries(OWASP_PATTERNS)) {
+                for (const pattern of config.patterns) {
+                    if (pattern.test(urlLower) || pattern.test(serviceLower)) {
+                        return { category: key, ...config };
+                    }
+                }
+            }
+            
+            // Check service name for clues
+            if (serviceLower.includes('malicious') || serviceLower.includes('attacker') || serviceLower.includes('🚨')) {
+                return { category: 'unknown', name: 'Malicious Traffic', class: 'owasp-unknown', icon: '🚨' };
+            }
+            
+            return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+        }
+
         // Malicious Traffic Tab Functions
         function fetchMaliciousStats() {
             fetch('/api/stats')
@@ -748,12 +913,15 @@ function formatBytes(bytes) {
             
             body.innerHTML = '';
             let maliciousCount = 0;
+            const categoryCounts = { injection: 0, xss: 0, traversal: 0, rce: 0, brute: 0, scan: 0, unknown: 0 };
             
             fetch('/api/blacklist')
                 .then(res => res.json())
                 .then(blacklistData => {
                     const customServices = blacklistData.custom_services || {};
+                    const maliciousFlows = [];
                     
+                    // Collect all malicious flows
                     data.forEach(service => {
                         if (service.details) {
                             service.details.forEach(flow => {
@@ -762,55 +930,92 @@ function formatBytes(bytes) {
                                 const isMalicious = srcService.includes('Malicious') || 
                                                   dstService.includes('Malicious') ||
                                                   srcService.includes('🚨') ||
-                                                  dstService.includes('🚨');
+                                                  dstService.includes('🚨') ||
+                                                  srcService.includes('Attacker') ||
+                                                  dstService.includes('Attacker');
                                 
                                 if (isMalicious) {
                                     maliciousCount++;
-                                    const tr = document.createElement('tr');
-                                    tr.style.background = 'rgba(239, 68, 68, 0.1)';
-                                    tr.style.borderLeft = '3px solid #ef4444';
-                                    tr.innerHTML = `
-                                        <td><span class="badge badge-block">🚨 MALICIOUS</span></td>
-                                        <td>
-                                            <div class="mono">${flow.src}</div>
-                                            <div class="host">${srcService || service.service}</div>
-                                        </td>
-                                        <td class="mono">${flow.dst}</td>
-                                        <td>${flow.proto}</td>
-                                        <td style="text-align: right; color: #ef4444; font-weight: 600;">${flow.pps || 0}</td>
-                                        <td style="text-align: right; color: #ef4444; font-weight: 600;">${flow.bps || 0}</td>
-                                        <td style="text-align: right; font-weight: 800;">${flow.pkts ? flow.pkts.toLocaleString() : 0}</td>
-                                        <td style="text-align: right; color: #60a5fa;">${formatBytes(flow.bytes)}</td>
-                                        <td style="text-align: center;">
-                                            <button onclick="quickAction('block', '${flow.src}')" 
-                                                    class="btn-block" style="padding: 5px 12px; font-size: 0.7rem;">
-                                                BLOCK
-                                            </button>
-                                        </td>
-                                    `;
-                                    body.appendChild(tr);
+                                    const attackInfo = classifyOWASPAttack(service.service, srcService || dstService);
+                                    categoryCounts[attackInfo.category]++;
+                                    
+                                    maliciousFlows.push({
+                                        flow,
+                                        srcService,
+                                        dstService,
+                                        attackInfo,
+                                        service
+                                    });
                                 }
                             });
                         }
                     });
                     
+                    // Update category stats
+                    document.getElementById('stat-injection').innerText = categoryCounts.injection;
+                    document.getElementById('stat-xss').innerText = categoryCounts.xss;
+                    document.getElementById('stat-traversal').innerText = categoryCounts.traversal;
+                    document.getElementById('stat-rce').innerText = categoryCounts.rce;
+                    document.getElementById('stat-brute').innerText = categoryCounts.brute;
+                    document.getElementById('stat-scan').innerText = categoryCounts.scan;
+                    
+                    // Update main badge
                     const countBadge = document.getElementById('malicious-count');
                     if (countBadge) {
                         countBadge.innerText = maliciousCount;
                         countBadge.style.display = maliciousCount > 0 ? 'inline-block' : 'none';
                     }
                     
+                    // Render table rows grouped by category
                     if (maliciousCount === 0) {
                         body.innerHTML = `
                             <tr>
-                                <td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
                                     <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
                                     <div>No malicious traffic detected</div>
                                     <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
                                 </td>
                             </tr>
                         `;
+                        return;
                     }
+                    
+                    // Sort by attack category
+                    maliciousFlows.sort((a, b) => a.attackInfo.category.localeCompare(b.attackInfo.category));
+                    
+                    maliciousFlows.forEach(({ flow, srcService, dstService, attackInfo, service }) => {
+                        const tr = document.createElement('tr');
+                        tr.style.background = 'rgba(239, 68, 68, 0.05)';
+                        tr.style.borderLeft = `3px solid ${getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#ef4444'}`;
+                        
+                        const displayService = srcService || dstService || service.service;
+                        
+                        tr.innerHTML = `
+                            <td>
+                                <span class="owasp-category ${attackInfo.class}">
+                                    ${attackInfo.icon} ${attackInfo.name}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="mono" style="font-size: 0.8rem; color: #fbbf24;">${service.service || 'Unknown'}</div>
+                            </td>
+                            <td>
+                                <div class="mono">${flow.src}</div>
+                                <div class="host">${displayService}</div>
+                            </td>
+                            <td class="mono">${flow.dst}</td>
+                            <td style="text-align: right; color: #ef4444; font-weight: 600;">${flow.pps || 0}</td>
+                            <td style="text-align: right; font-weight: 800;">${flow.pkts ? flow.pkts.toLocaleString() : 0}</td>
+                            <td style="text-align: right; color: #60a5fa;">${formatBytes(flow.bytes)}</td>
+                            <td style="text-align: center;">
+                                <button onclick="quickAction('block', '${flow.src}')" 
+                                        class="btn-block" style="padding: 5px 12px; font-size: 0.7rem;">
+                                    BLOCK
+                                </button>
+                            </td>
+                        `;
+                        body.appendChild(tr);
+                    });
                 });
         }
 
@@ -840,8 +1045,8 @@ function formatBytes(bytes) {
     <div id="malicious-dashboard" class="container text-center">
         <header class="malicious-header">
             <div>
-                <h1 style="background: linear-gradient(135deg, #fff, #ef4444); -webkit-background-clip: text;">🚨 MALICIOUS TRAFFIC MONITOR</h1>
-                <div style="font-size: 0.8rem; color: #ef4444;">Real-time Threat Detection & Classification</div>
+                <h1 style="background: linear-gradient(135deg, #fff, #ef4444); -webkit-background-clip: text;">🚨 OWASP THREAT DETECTION</h1>
+                <div style="font-size: 0.8rem; color: #ef4444;">Real-time Attack Classification & Monitoring</div>
             </div>
             <div class="controls">
                 <button class="btn-hide" onclick="switchDashboardTab('main')" style="margin-right: 10px;">
@@ -853,15 +1058,42 @@ function formatBytes(bytes) {
             </div>
         </header>
 
+        <!-- OWASP Category Stats -->
+        <div class="owasp-stats-grid">
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-injection" style="color: #f87171;">0</div>
+                <div class="owasp-stat-label">Injection Attacks</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-xss" style="color: #fbbf24;">0</div>
+                <div class="owasp-stat-label">XSS Attacks</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-traversal" style="color: #818cf8;">0</div>
+                <div class="owasp-stat-label">Path Traversal</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-rce" style="color: #f472b6;">0</div>
+                <div class="owasp-stat-label">RCE / Command Inj</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-brute" style="color: #34d399;">0</div>
+                <div class="owasp-stat-label">Brute Force</div>
+            </div>
+            <div class="owasp-stat-card">
+                <div class="owasp-stat-value" id="stat-scan" style="color: #22d3ee;">0</div>
+                <div class="owasp-stat-label">Port Scanning</div>
+            </div>
+        </div>
+
         <table id="malicious-stats-table">
             <thead>
                 <tr>
-                    <th>Threat Level</th>
+                    <th>OWASP Category</th>
+                    <th>Attack Type</th>
                     <th>Source</th>
                     <th>Destination</th>
-                    <th>Protocol</th>
                     <th style="text-align: right;">PPS</th>
-                    <th style="text-align: right;">BPS</th>
                     <th style="text-align: right;">Packets</th>
                     <th style="text-align: right;">Bytes</th>
                     <th style="text-align: center;">Actions</th>
@@ -869,7 +1101,7 @@ function formatBytes(bytes) {
             </thead>
             <tbody id="malicious-stats-body">
                 <tr>
-                    <td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">
+                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
                         <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
                         <div>No malicious traffic detected</div>
                         <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
