@@ -974,19 +974,10 @@ function formatBytes(bytes) {
                         countBadge.style.display = maliciousCount > 0 ? 'inline-block' : 'none';
                     }
                     
-                    // Handle empty state
+                    // Handle empty state - just clear the table, no message
                     if (maliciousCount === 0) {
-                        if (body.children.length === 0 || body.children[0].innerHTML.includes('No malicious')) {
-                            body.innerHTML = `
-                                <tr>
-                                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                                        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-                                        <div>No malicious traffic detected</div>
-                                        <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
-                                    </td>
-                                </tr>
-                            `;
-                        }
+                        // Remove all existing rows
+                        Array.from(body.children).forEach(row => row.remove());
                         return;
                     }
                     
