@@ -436,6 +436,8 @@
     </div>
 
     <script>
+
+        
         // Shared references - will point to specific hashmaps based on active tab
         let hiddenItems = normalHiddenItems;
         let expandedServices = normalExpandedServices;
@@ -1115,11 +1117,7 @@ function formatBytes(bytes) {
         let maliciousRefreshInterval = null;
         let maliciousFlowsCache = new Map(); // Cache for stable updates
         
-        // Separate tracking for normal vs malicious flows
-        let normalFlowsCache = new Map();    // Normal traffic flows
-        let normalHiddenItems = new Set();   // Hidden items for normal tab only
-        let normalExpandedServices = new Set(); // Expanded services for normal tab only
-        let maliciousHiddenItems = new Set();   // Hidden items for malicious tab only
+
 
         // Reset ONLY malicious traffic counters (separate from normal traffic)
         function resetMaliciousCounters() {
