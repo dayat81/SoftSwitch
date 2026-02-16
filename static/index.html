@@ -974,8 +974,6 @@ function formatBytes(bytes) {
                                     maliciousFlows.push({
                                         id: flowId,
                                         flow,
-                                        srcService,
-                                        dstService,
                                         attackInfo,
                                         service
                                     });
@@ -1014,10 +1012,10 @@ function formatBytes(bytes) {
                     const updatedIds = new Set();
                     
                     // Update or create rows
-                    maliciousFlows.forEach(({ id, flow, srcService, dstService, attackInfo, service }, index) => {
+                    maliciousFlows.forEach(({ id, flow, attackInfo, service }, index) => {
                         updatedIds.add(id);
                         let row = document.getElementById(`malicious-row-${id}`);
-                        const displayService = srcService || dstService || service.service;
+                        const displayService = service.service;
                         
                         if (!row) {
                             // Create new row
