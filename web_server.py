@@ -502,155 +502,85 @@ def static_files(path):
 # Separate API endpoints for normal and malicious traffic (eBPF hashmap separation)
 @app.route('/api/stats/normal', methods=['GET'])
 def get_normal_stats():
-    """Get normal traffic stats (non-internal traffic) - formatted like get_stats()"""
+    """Get normal traffic stats (non-internal traffic)"""
     try:
-        # Get blacklist
-        blacklist_id = get_map_id("Map_blacklist")
-        blacklist_ips = set()
-        if blacklist_id:
-            try:
-                bl_cmd = ["sudo", "bpftool", "map", "dump", "id", str(blacklist_id), "-j"]
-                bl_data = json.loads(subprocess.check_output(bl_cmd))
-                for entry in bl_data:
-                    blacklist_ips.add(ip_to_str(entry["key"]))
-            except: pass
+        # Get all stats from main endpoint
+        with app.test_client() as client:
+            response = client.get('/api/stats')
+            all_data = json.loads(response.data)
         
-        # Use existing stream_stats but filter for normal traffic only
-        now_wall = time.time()
-        PRUNE_TIMEOUT = 15
-        result = []
-        to_delete = []
-        
-        for k, v in stream_stats.items():
-            if now_wall - v['last_seen'] > PRUNE_TIMEOUT:
-                to_delete.append(k)
+        # Filter for non-internal traffic
+        normal_data = []
+        for service in all_data:
+            if not service.get('details'):
                 continue
+            # Check if this service has any internal flows
+            has_internal = False
+            for flow in service['details']:
+                src = flow.get('src', '')
+                dst = flow.get('dst', '')
+                if src.startswith('192.168.0.') and dst.startswith('192.168.0.'):
+                    has_internal = True
+                    break
             
-            # Filter: only include NON-INTERNAL traffic (normal)
-            src = v.get('src', '')
-            dst = v.get('dst', '')
-            is_internal = src.startswith("192.168.0.") and dst.startswith("192.168.0.")
-            if is_internal:
-                continue  # Skip internal traffic (malicious)
-            
-            hostname = dns_cache.get(v['src'], v['src'])
-            proto_name = f"0x{v['proto']:04x}"
-            if v['proto'] == 0x0800: proto_name = "IPv4"
-            elif v['proto'] == 0x86dd: proto_name = "IPv6"
-            elif v['proto'] == 0x0806: proto_name = "ARP"
-            
-            if v['proto'] == 0x0800:
-                service_name = classify_traffic(v['src'], v['dst'], hostname)
+            if not has_internal:
+                normal_data.append(service)
             else:
-                service_name = "-"
-            
-            result.append({
-                "status": "BLOCK" if v['dst'] in blacklist_ips else "PASS",
-                "src": v['src'], "host": hostname, "service": service_name,
-                "dst": v['dst'], "proto": proto_name, "vlan": v['vlan'],
-                "pps": round(v['pps'], 1), "bps": round(v['bps'], 1),
-                "pkts": v['pkts'], "bytes": v['bytes']
-            })
+                # Filter out internal flows from this service
+                external_flows = [f for f in service['details'] 
+                                  if not (f.get('src', '').startswith('192.168.0.') and 
+                                          f.get('dst', '').startswith('192.168.0.'))]
+                if external_flows:
+                    # Recalculate totals for filtered service
+                    new_service = {
+                        'service': service['service'],
+                        'status': service['status'],
+                        'details': external_flows,
+                        'flows': len(external_flows),
+                        'pkts': sum(f.get('pkts', 0) for f in external_flows),
+                        'bytes': sum(f.get('bytes', 0) for f in external_flows),
+                        'pps': sum(f.get('pps', 0) for f in external_flows),
+                        'bps': sum(f.get('bps', 0) for f in external_flows)
+                    }
+                    normal_data.append(new_service)
         
-        for k in to_delete: 
-            if k in stream_stats: del stream_stats[k]
-        
-        # Group by service
-        grouped = {}
-        for item in result:
-            svc = item['service']
-            if svc not in grouped:
-                grouped[svc] = {'service': svc, 'pkts': 0, 'bytes': 0, 'bps': 0.0, 'pps': 0.0,
-                               'flows': 0, 'status': item['status'], 'details': []}
-            grouped[svc]['pkts'] += item['pkts']
-            grouped[svc]['bps'] += item['bps']
-            grouped[svc]['pps'] += item['pps']
-            grouped[svc]['flows'] += 1
-            grouped[svc]['bytes'] += item['bytes']
-            grouped[svc]['details'].append({
-                'src': item['src'], 'dst': item['dst'], 'host': item['host'],
-                'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
-                'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
-            })
-        
-        return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
+        return jsonify(normal_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/stats/malicious', methods=['GET'])
 def get_malicious_stats():
-    """Get malicious/attack traffic stats (internal 192.168.0.x) - formatted like get_stats()"""
+    """Get malicious/attack traffic stats (internal 192.168.0.x)"""
     try:
-        # Get blacklist
-        blacklist_id = get_map_id("Map_blacklist")
-        blacklist_ips = set()
-        if blacklist_id:
-            try:
-                bl_cmd = ["sudo", "bpftool", "map", "dump", "id", str(blacklist_id), "-j"]
-                bl_data = json.loads(subprocess.check_output(bl_cmd))
-                for entry in bl_data:
-                    blacklist_ips.add(ip_to_str(entry["key"]))
-            except: pass
+        # Get all stats from main endpoint
+        with app.test_client() as client:
+            response = client.get('/api/stats')
+            all_data = json.loads(response.data)
         
-        # Use existing stream_stats but filter for malicious traffic only
-        now_wall = time.time()
-        PRUNE_TIMEOUT = 15
-        result = []
-        to_delete = []
-        
-        for k, v in stream_stats.items():
-            if now_wall - v['last_seen'] > PRUNE_TIMEOUT:
-                to_delete.append(k)
+        # Filter for internal traffic only
+        malicious_data = []
+        for service in all_data:
+            if not service.get('details'):
                 continue
-            
-            # Filter: only include INTERNAL traffic (malicious)
-            src = v.get('src', '')
-            dst = v.get('dst', '')
-            is_internal = src.startswith("192.168.0.") and dst.startswith("192.168.0.")
-            if not is_internal:
-                continue  # Skip non-internal traffic (normal)
-            
-            hostname = dns_cache.get(v['src'], v['src'])
-            proto_name = f"0x{v['proto']:04x}"
-            if v['proto'] == 0x0800: proto_name = "IPv4"
-            elif v['proto'] == 0x86dd: proto_name = "IPv6"
-            elif v['proto'] == 0x0806: proto_name = "ARP"
-            
-            if v['proto'] == 0x0800:
-                service_name = classify_traffic(v['src'], v['dst'], hostname)
-            else:
-                service_name = "-"
-            
-            result.append({
-                "status": "BLOCK" if v['dst'] in blacklist_ips else "PASS",
-                "src": v['src'], "host": hostname, "service": service_name,
-                "dst": v['dst'], "proto": proto_name, "vlan": v['vlan'],
-                "pps": round(v['pps'], 1), "bps": round(v['bps'], 1),
-                "pkts": v['pkts'], "bytes": v['bytes']
-            })
+            # Filter to only internal flows
+            internal_flows = [f for f in service['details'] 
+                              if f.get('src', '').startswith('192.168.0.') and 
+                                 f.get('dst', '').startswith('192.168.0.')]
+            if internal_flows:
+                # Recalculate totals for filtered service
+                new_service = {
+                    'service': service['service'],
+                    'status': service['status'],
+                    'details': internal_flows,
+                    'flows': len(internal_flows),
+                    'pkts': sum(f.get('pkts', 0) for f in internal_flows),
+                    'bytes': sum(f.get('bytes', 0) for f in internal_flows),
+                    'pps': sum(f.get('pps', 0) for f in internal_flows),
+                    'bps': sum(f.get('bps', 0) for f in internal_flows)
+                }
+                malicious_data.append(new_service)
         
-        for k in to_delete: 
-            if k in stream_stats: del stream_stats[k]
-        
-        # Group by service
-        grouped = {}
-        for item in result:
-            svc = item['service']
-            if svc not in grouped:
-                grouped[svc] = {'service': svc, 'pkts': 0, 'bytes': 0, 'bps': 0.0, 'pps': 0.0,
-                               'flows': 0, 'status': item['status'], 'details': []}
-            grouped[svc]['pkts'] += item['pkts']
-            grouped[svc]['bps'] += item['bps']
-            grouped[svc]['pps'] += item['pps']
-            grouped[svc]['flows'] += 1
-            grouped[svc]['bytes'] += item['bytes']
-            grouped[svc]['details'].append({
-                'src': item['src'], 'dst': item['dst'], 'host': item['host'],
-                'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
-                'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
-            })
-        
-        return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
+        return jsonify(malicious_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
