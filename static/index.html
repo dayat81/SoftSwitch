@@ -770,12 +770,21 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
-        // Reset ONLY normal traffic counters
+        // Reset ONLY normal traffic counters (UI only, does NOT affect malicious)
         async function resetStats() {
-            if (!confirm("Reset NORMAL traffic counters?")) return;
-            await fetch('/api/reset', { method: 'POST' });
+            if (!confirm("Reset NORMAL traffic counters?\n(Malicious counters will NOT be affected)")) return;
+            
+            // Only reset hidden tracking variables for normal traffic
+            hiddenItems.clear();
+            expandedServices.clear();
+            
+            // Clear and refresh the display
+            const body = document.getElementById('stats-body');
+            if (body) body.innerHTML = '';
+            
+            // Re-fetch to get current state (does NOT reset backend)
             fetchStats();
-            console.log('Normal traffic counters reset');
+            console.log('Normal traffic counters reset (malicious unaffected)');
         }
 
         async function action(type) {
