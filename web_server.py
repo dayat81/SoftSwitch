@@ -527,7 +527,10 @@ def get_normal_stats():
                 continue
             
             # Filter: only include NON-INTERNAL traffic (normal)
-            if v['src'].startswith("192.168.0.") and v['dst'].startswith("192.168.0."):
+            src = v.get('src', '')
+            dst = v.get('dst', '')
+            is_internal = src.startswith("192.168.0.") and dst.startswith("192.168.0.")
+            if is_internal:
                 continue  # Skip internal traffic (malicious)
             
             hostname = dns_cache.get(v['src'], v['src'])
@@ -601,7 +604,10 @@ def get_malicious_stats():
                 continue
             
             # Filter: only include INTERNAL traffic (malicious)
-            if not (v['src'].startswith("192.168.0.") and v['dst'].startswith("192.168.0.")):
+            src = v.get('src', '')
+            dst = v.get('dst', '')
+            is_internal = src.startswith("192.168.0.") and dst.startswith("192.168.0.")
+            if not is_internal:
                 continue  # Skip non-internal traffic (normal)
             
             hostname = dns_cache.get(v['src'], v['src'])
