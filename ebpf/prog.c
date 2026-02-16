@@ -116,6 +116,15 @@ struct
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } Map_stats_traffic SEC(".maps");
 
+// Blacklist map for blocking IPs
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);  // IPv4 address
+    __type(value, __u8); // 1 = blocked
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} Map_blacklist SEC(".maps");
+
 struct xdp_stats
 {
     __u64 rx_dropped_bytes;
@@ -915,6 +924,15 @@ int Prog_xdp(struct xdp_md *ctx)
 
     t_key.src_ipv4 = ip_header->saddr;
     t_key.dst_ipv4 = ip_header->daddr;
+
+    // Blacklist check - drop if source IP is in blacklist
+    __u8 *blocked = bpf_map_lookup_elem(&Map_blacklist, &t_key.src_ipv4);
+    if (blocked && *blocked)
+    {
+        bpf_printk("[XDP] BLOCKED IP: %pI4", &t_key.src_ipv4);
+        goto drop;
+    }
+
     t_key.proto_l3 = ip_header->protocol;
     traffic_stat.size = ip_header->tot_len;
 
