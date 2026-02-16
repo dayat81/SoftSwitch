@@ -289,6 +289,7 @@
                     <th style="text-align: right;">PPS</th>
                     <th style="text-align: right;">BPS</th>
                     <th style="text-align: right;">Packets</th>
+                    <th style="text-align: right;">Bytes</th>
                     <th style="text-align: center;">Actions</th>
                 </tr>
             </thead>
@@ -315,6 +316,15 @@
             }
         }
 
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
         function renderTable(data) {
             const body = document.getElementById('stats-body');
             body.innerHTML = '';
@@ -340,6 +350,7 @@
                     <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.pps ? service.pps.toFixed(1) : 0.0}</td>
                     <td style="text-align: right; color: #4ade80; font-weight: 600;">${service.bps ? service.bps.toFixed(1) : 0.0}</td>
                     <td style="text-align: right; font-weight: 800; font-size: 1.1rem;">${service.pkts ? service.pkts.toLocaleString() : 0}</td>
+                    <td style="text-align: right; color: #60a5fa; font-weight: 600;">${service.bytes ? formatBytes(service.bytes) : "0 B"}</td>
                     <td style="text-align: center;">
                         <button onclick="event.stopPropagation(); blockService('${service.service}')" 
                                 class="btn-${service.status === 'PASS' ? 'block' : 'unblock'}" 
@@ -370,6 +381,7 @@
                             <td style="text-align: right; color: #4ade80;">${flow.pps || 0}</td>
                             <td style="text-align: right; color: #4ade80;">${flow.bps || 0}</td>
                             <td style="text-align: right;">${flow.pkts || 0}</td>
+                            <td style="text-align: right; color: #60a5fa;">${flow.bytes ? formatBytes(flow.bytes) : "0 B"}</td>
                             <td style="text-align: center;">
                                 <button onclick="handleBlock('${flow.status}', '${flow.dst}')" 
                                         class="btn-${flow.status === 'PASS' ? 'block' : 'unblock'}" 
