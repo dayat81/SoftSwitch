@@ -449,11 +449,16 @@
         async function fetchStats() {
             try {
                 const res = await fetch('/api/stats');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
+                if (!Array.isArray(data)) throw new Error('Invalid data format');
                 renderTable(data);
-                document.getElementById('loading-overlay').style.display = 'none';
             } catch (e) {
                 console.error("Fetch error:", e);
+            } finally {
+                // Always hide overlay after first attempt
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.style.display = 'none';
             }
         }
 
@@ -820,6 +825,15 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
+        // Hide overlay after first successful load or timeout
+        setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay && overlay.style.display !== 'none') {
+                overlay.style.display = 'none';
+                console.log('Overlay hidden by timeout');
+            }
+        }, 3000); // Force hide after 3 seconds
+        
         setInterval(() => {
             fetchStats();
             // Also refresh malicious tab if active
