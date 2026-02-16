@@ -1063,17 +1063,9 @@ function formatBytes(bytes) {
             document.getElementById('malicious-count').innerText = '0';
             document.getElementById('malicious-count').style.display = 'none';
             
-            // Clear the table and show empty state
+            // Clear the table
             const body = document.getElementById('malicious-stats-body');
-            body.innerHTML = `
-                <tr>
-                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-                        <div>Counters reset - No malicious traffic detected</div>
-                        <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
-                    </td>
-                </tr>
-            `;
+            Array.from(body.children).forEach(row => row.remove());
             
             // Call API reset
             fetch('/api/reset', { method: 'POST' })
@@ -1185,15 +1177,7 @@ function formatBytes(bytes) {
                     <th style="text-align: center;">Actions</th>
                 </tr>
             </thead>
-            <tbody id="malicious-stats-body">
-                <tr>
-                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-                        <div>No malicious traffic detected</div>
-                        <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
-                    </td>
-                </tr>
-            </tbody>
+            <tbody id="malicious-stats-body"></tbody>
         </table>
     </div>
 
