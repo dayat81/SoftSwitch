@@ -497,6 +497,67 @@ def index():
 def static_files(path):
     return send_from_directory('static', path)
 
+
+
+# Separate API endpoints for normal and malicious traffic (eBPF hashmap separation)
+@app.route('/api/stats/normal', methods=['GET'])
+def get_normal_stats():
+    """Get normal traffic stats (non-internal traffic)"""
+    try:
+        stats_id = get_map_id("Map_stats_traff")
+        if not stats_id:
+            return jsonify({"error": "Map not found"}), 500
+        
+        cmd = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
+        data = json.loads(subprocess.check_output(cmd))
+        
+        # Filter: only include non-internal traffic as "normal"
+        normal_flows = []
+        for entry in data:
+            src_ip, dst_ip, vlan, l2_proto = parse_key(entry["key"])
+            # Check if it's NOT internal 192.168.0.x traffic
+            is_internal = (src_ip.startswith("192.168.0.") and dst_ip.startswith("192.168.0."))
+            if not is_internal:
+                normal_flows.append(entry)
+        
+        return jsonify(normal_flows)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stats/malicious', methods=['GET'])
+def get_malicious_stats():
+    """Get malicious/attack traffic stats (internal 192.168.0.x traffic)"""
+    try:
+        stats_id = get_map_id("Map_stats_traff")
+        if not stats_id:
+            return jsonify({"error": "Map not found"}), 500
+        
+        cmd = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
+        data = json.loads(subprocess.check_output(cmd))
+        
+        # Filter: only include internal 192.168.0.x traffic as "malicious"
+        malicious_flows = []
+        for entry in data:
+            src_ip, dst_ip, vlan, l2_proto = parse_key(entry["key"])
+            is_internal = (src_ip.startswith("192.168.0.") and dst_ip.startswith("192.168.0."))
+            if is_internal:
+                malicious_flows.append(entry)
+        
+        return jsonify(malicious_flows)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reset/normal', methods=['POST'])
+def reset_normal_stats():
+    """Reset normal traffic stats (placeholder until eBPF has separate maps)"""
+    return jsonify({"status": "ok", "message": "Normal stats reset (simulated)"})
+
+@app.route('/api/reset/malicious', methods=['POST'])
+def reset_malicious_stats():
+    """Reset malicious traffic stats (placeholder until eBPF has separate maps)"""
+    return jsonify({"status": "ok", "message": "Malicious stats reset (simulated)"})
+
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, threaded=True)
 
