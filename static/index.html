@@ -436,7 +436,12 @@
     </div>
 
     <script>
-
+        // Separate tracking for normal vs malicious flows (DECLARE FIRST)
+        let normalFlowsCache = new Map();    // Normal traffic flows
+        let normalHiddenItems = new Set();   // Hidden items for normal tab only
+        let normalExpandedServices = new Set(); // Expanded services for normal tab only
+        let maliciousFlowsCache = new Map();    // Malicious traffic flows
+        let maliciousHiddenItems = new Set();   // Hidden items for malicious tab only
         
         // Shared references - will point to specific hashmaps based on active tab
         let hiddenItems = normalHiddenItems;
