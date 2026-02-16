@@ -970,7 +970,7 @@ function formatBytes(bytes) {
                                                   dstService.includes('Attacker');
                                 
                                 if (isMalicious) {
-                                    const attackInfo = classifyOWASPAttack(service.service, srcService || dstService);
+                                    const attackInfo = classifyOWASPAttack(service.service, flow);
                                     categoryCounts[attackInfo.category]++;
                                     
                                     // Create unique ID for this flow
