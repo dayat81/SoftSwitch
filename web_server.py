@@ -502,48 +502,149 @@ def static_files(path):
 # Separate API endpoints for normal and malicious traffic (eBPF hashmap separation)
 @app.route('/api/stats/normal', methods=['GET'])
 def get_normal_stats():
-    """Get normal traffic stats (non-internal traffic)"""
+    """Get normal traffic stats (non-internal traffic) - formatted like get_stats()"""
     try:
-        stats_id = get_map_id("Map_stats_traff")
-        if not stats_id:
-            return jsonify({"error": "Map not found"}), 500
+        # Get blacklist
+        blacklist_id = get_map_id("Map_blacklist")
+        blacklist_ips = set()
+        if blacklist_id:
+            try:
+                bl_cmd = ["sudo", "bpftool", "map", "dump", "id", str(blacklist_id), "-j"]
+                bl_data = json.loads(subprocess.check_output(bl_cmd))
+                for entry in bl_data:
+                    blacklist_ips.add(ip_to_str(entry["key"]))
+            except: pass
         
-        cmd = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
-        data = json.loads(subprocess.check_output(cmd))
+        # Use existing stream_stats but filter for normal traffic only
+        now_wall = time.time()
+        PRUNE_TIMEOUT = 15
+        result = []
+        to_delete = []
         
-        # Filter: only include non-internal traffic as "normal"
-        normal_flows = []
-        for entry in data:
-            src_ip, dst_ip, vlan, l2_proto = parse_key(entry["key"])
-            # Check if it's NOT internal 192.168.0.x traffic
-            is_internal = (src_ip.startswith("192.168.0.") and dst_ip.startswith("192.168.0."))
-            if not is_internal:
-                normal_flows.append(entry)
+        for k, v in stream_stats.items():
+            if now_wall - v['last_seen'] > PRUNE_TIMEOUT:
+                to_delete.append(k)
+                continue
+            
+            # Filter: only include NON-INTERNAL traffic (normal)
+            if v['src'].startswith("192.168.0.") and v['dst'].startswith("192.168.0."):
+                continue  # Skip internal traffic (malicious)
+            
+            hostname = dns_cache.get(v['src'], v['src'])
+            proto_name = f"0x{v['proto']:04x}"
+            if v['proto'] == 0x0800: proto_name = "IPv4"
+            elif v['proto'] == 0x86dd: proto_name = "IPv6"
+            elif v['proto'] == 0x0806: proto_name = "ARP"
+            
+            if v['proto'] == 0x0800:
+                service_name = classify_traffic(v['src'], v['dst'], hostname)
+            else:
+                service_name = "-"
+            
+            result.append({
+                "status": "BLOCK" if v['dst'] in blacklist_ips else "PASS",
+                "src": v['src'], "host": hostname, "service": service_name,
+                "dst": v['dst'], "proto": proto_name, "vlan": v['vlan'],
+                "pps": round(v['pps'], 1), "bps": round(v['bps'], 1),
+                "pkts": v['pkts'], "bytes": v['bytes']
+            })
         
-        return jsonify(normal_flows)
+        for k in to_delete: 
+            if k in stream_stats: del stream_stats[k]
+        
+        # Group by service
+        grouped = {}
+        for item in result:
+            svc = item['service']
+            if svc not in grouped:
+                grouped[svc] = {'service': svc, 'pkts': 0, 'bytes': 0, 'bps': 0.0, 'pps': 0.0,
+                               'flows': 0, 'status': item['status'], 'details': []}
+            grouped[svc]['pkts'] += item['pkts']
+            grouped[svc]['bps'] += item['bps']
+            grouped[svc]['pps'] += item['pps']
+            grouped[svc]['flows'] += 1
+            grouped[svc]['bytes'] += item['bytes']
+            grouped[svc]['details'].append({
+                'src': item['src'], 'dst': item['dst'], 'host': item['host'],
+                'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
+                'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
+            })
+        
+        return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/stats/malicious', methods=['GET'])
 def get_malicious_stats():
-    """Get malicious/attack traffic stats (internal 192.168.0.x traffic)"""
+    """Get malicious/attack traffic stats (internal 192.168.0.x) - formatted like get_stats()"""
     try:
-        stats_id = get_map_id("Map_stats_traff")
-        if not stats_id:
-            return jsonify({"error": "Map not found"}), 500
+        # Get blacklist
+        blacklist_id = get_map_id("Map_blacklist")
+        blacklist_ips = set()
+        if blacklist_id:
+            try:
+                bl_cmd = ["sudo", "bpftool", "map", "dump", "id", str(blacklist_id), "-j"]
+                bl_data = json.loads(subprocess.check_output(bl_cmd))
+                for entry in bl_data:
+                    blacklist_ips.add(ip_to_str(entry["key"]))
+            except: pass
         
-        cmd = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
-        data = json.loads(subprocess.check_output(cmd))
+        # Use existing stream_stats but filter for malicious traffic only
+        now_wall = time.time()
+        PRUNE_TIMEOUT = 15
+        result = []
+        to_delete = []
         
-        # Filter: only include internal 192.168.0.x traffic as "malicious"
-        malicious_flows = []
-        for entry in data:
-            src_ip, dst_ip, vlan, l2_proto = parse_key(entry["key"])
-            is_internal = (src_ip.startswith("192.168.0.") and dst_ip.startswith("192.168.0."))
-            if is_internal:
-                malicious_flows.append(entry)
+        for k, v in stream_stats.items():
+            if now_wall - v['last_seen'] > PRUNE_TIMEOUT:
+                to_delete.append(k)
+                continue
+            
+            # Filter: only include INTERNAL traffic (malicious)
+            if not (v['src'].startswith("192.168.0.") and v['dst'].startswith("192.168.0.")):
+                continue  # Skip non-internal traffic (normal)
+            
+            hostname = dns_cache.get(v['src'], v['src'])
+            proto_name = f"0x{v['proto']:04x}"
+            if v['proto'] == 0x0800: proto_name = "IPv4"
+            elif v['proto'] == 0x86dd: proto_name = "IPv6"
+            elif v['proto'] == 0x0806: proto_name = "ARP"
+            
+            if v['proto'] == 0x0800:
+                service_name = classify_traffic(v['src'], v['dst'], hostname)
+            else:
+                service_name = "-"
+            
+            result.append({
+                "status": "BLOCK" if v['dst'] in blacklist_ips else "PASS",
+                "src": v['src'], "host": hostname, "service": service_name,
+                "dst": v['dst'], "proto": proto_name, "vlan": v['vlan'],
+                "pps": round(v['pps'], 1), "bps": round(v['bps'], 1),
+                "pkts": v['pkts'], "bytes": v['bytes']
+            })
         
-        return jsonify(malicious_flows)
+        for k in to_delete: 
+            if k in stream_stats: del stream_stats[k]
+        
+        # Group by service
+        grouped = {}
+        for item in result:
+            svc = item['service']
+            if svc not in grouped:
+                grouped[svc] = {'service': svc, 'pkts': 0, 'bytes': 0, 'bps': 0.0, 'pps': 0.0,
+                               'flows': 0, 'status': item['status'], 'details': []}
+            grouped[svc]['pkts'] += item['pkts']
+            grouped[svc]['bps'] += item['bps']
+            grouped[svc]['pps'] += item['pps']
+            grouped[svc]['flows'] += 1
+            grouped[svc]['bytes'] += item['bytes']
+            grouped[svc]['details'].append({
+                'src': item['src'], 'dst': item['dst'], 'host': item['host'],
+                'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
+                'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
+            })
+        
+        return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

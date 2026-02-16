@@ -451,16 +451,20 @@
         let ipFilter = null;
         let blacklistData = null;
 
-        // Fetch ALL traffic stats and render
+        // Fetch NORMAL traffic stats from separate endpoint
         async function fetchStats() {
             try {
-                const res = await fetch('/api/stats');
+                const res = await fetch('/api/stats/normal');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 if (!Array.isArray(data)) throw new Error('Invalid data format');
                 renderTable(data);
             } catch (e) {
                 console.error("Fetch error:", e);
+                // Fallback to all stats
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                renderTable(data);
             } finally {
                 const overlay = document.getElementById('loading-overlay');
                 if (overlay) overlay.style.display = 'none';
@@ -997,23 +1001,18 @@ function formatBytes(bytes) {
             return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
         }
 
-        // Fetch ALL traffic stats and filter for malicious
+        // Fetch MALICIOUS traffic stats from separate endpoint
         function fetchMaliciousStats() {
-            fetch('/api/stats')
+            fetch('/api/stats/malicious')
                 .then(res => res.json())
-                .then(data => {
-                    // Filter for internal traffic (malicious)
-                    const maliciousData = data.filter(service => {
-                        if (!service.details) return false;
-                        return service.details.some(flow => {
-                            const src = flow.src || '';
-                            const dst = flow.dst || '';
-                            return src.startsWith('192.168.0.') && dst.startsWith('192.168.0.');
-                        });
-                    });
-                    renderMaliciousTable(maliciousData);
-                })
-                .catch(e => console.error("Fetch error:", e));
+                .then(data => renderMaliciousTable(data))
+                .catch(e => {
+                    console.error("Fetch error:", e);
+                    // Fallback
+                    fetch('/api/stats')
+                        .then(res => res.json())
+                        .then(data => renderMaliciousTable(data));
+                });
         }
 
         function renderMaliciousTable(data) {
