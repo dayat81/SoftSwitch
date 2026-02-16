@@ -960,17 +960,12 @@ function formatBytes(bytes) {
                     data.forEach(service => {
                         if (service.details) {
                             service.details.forEach(flow => {
-                                const srcService = customServices[flow.src] || '';
-                                const dstService = customServices[flow.dst] || '';
-                                const isMalicious = srcService.includes('Malicious') || 
-                                                  dstService.includes('Malicious') ||
-                                                  srcService.includes('🚨') ||
-                                                  dstService.includes('🚨') ||
-                                                  srcService.includes('Attacker') ||
-                                                  dstService.includes('Attacker');
+                                // Only classify based on behavioral patterns, NOT labels
+                                // This prevents showing legitimate outbound traffic as malicious
+                                const attackInfo = classifyOWASPAttack(service.service, flow);
                                 
-                                if (isMalicious) {
-                                    const attackInfo = classifyOWASPAttack(service.service, flow);
+                                // Only include if it's actually an attack based on behavior
+                                if (attackInfo.category !== 'unknown') {
                                     categoryCounts[attackInfo.category]++;
                                     
                                     // Create unique ID for this flow
