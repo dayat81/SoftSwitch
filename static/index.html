@@ -400,7 +400,9 @@
             <div class="controls">
                 <div id="hidden-count" onclick="openHidden()">0 Hidden</div>
                 <button class="btn-hide" onclick="openBlocks()" style="margin-right: 10px;">MANAGE BLOCKS</button>
-                <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;">RESET COUNTERS</button>
+                <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;"
+                    title="Reset only normal traffic counters"
+                >RESET NORMAL COUNTERS</button>
                 <input type="text" id="target-input" placeholder="IP Address or Service (e.g. Netflix)">
                 <button class="btn-block" onclick="action('block')">BLOCK</button>
                 <button class="btn-unblock" onclick="action('unblock')">UNBLOCK</button>
@@ -768,10 +770,12 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
+        // Reset ONLY normal traffic counters
         async function resetStats() {
-            if (!confirm("Are you sure you want to reset all traffic counters?")) return;
+            if (!confirm("Reset NORMAL traffic counters?")) return;
             await fetch('/api/reset', { method: 'POST' });
             fetchStats();
+            console.log('Normal traffic counters reset');
         }
 
         async function action(type) {
@@ -1098,8 +1102,9 @@ function formatBytes(bytes) {
         let maliciousRefreshInterval = null;
         let maliciousFlowsCache = new Map(); // Cache for stable updates
 
+        // Reset ONLY malicious traffic counters (separate from normal traffic)
         function resetMaliciousCounters() {
-            if (!confirm("Reset all malicious traffic counters?")) return;
+            if (!confirm("Reset MALICIOUS traffic counters?\n(Normal traffic counters will NOT be affected)")) return;
             
             // Reset counters visually
             document.getElementById('stat-injection').innerText = '0';
