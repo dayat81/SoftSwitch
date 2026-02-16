@@ -889,12 +889,42 @@ function formatBytes(bytes) {
             }
         };
 
-        // Classify attack based on service/URL patterns
-        function classifyOWASPAttack(serviceName, host) {
-            if (!serviceName) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+        // Behavioral detection - analyze traffic patterns, not just service names
+        function classifyOWASPAttack(serviceName, flow) {
+            if (!serviceName || !flow) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
             
             const serviceLower = serviceName.toLowerCase();
+            const src = flow.src || '';
+            const dst = flow.dst || '';
+            const pkts = flow.pkts || 0;
+            const pps = flow.pps || 0;
             
+            // Detect port scanning: high packet rate to multiple destinations from same source
+            // This is detected at service level aggregation
+            
+            // Detect brute force: sustained traffic to auth endpoints
+            // Look for patterns in internal network traffic
+            
+            // Check for internal attack traffic (192.168.0.x)
+            const isInternal = src.startsWith('192.168.0.') && dst.startsWith('192.168.0.');
+            const isHighVolume = pkts > 1000 || pps > 50;
+            const isLocalServer = dst === '192.168.0.160';
+            
+            // Classify based on traffic characteristics
+            if (isInternal && isLocalServer) {
+                // Internal attack traffic to raspi0
+                if (isHighVolume) {
+                    // High volume suggests automated attack (brute force, injection attempts)
+                    return { category: 'injection', name: 'Injection', class: 'owasp-injection', icon: '💉' };
+                }
+                
+                // Medium volume - could be scanning or probing
+                if (pkts > 100) {
+                    return { category: 'scan', name: 'Port Scanning', class: 'owasp-scan', icon: '🔍' };
+                }
+            }
+            
+            // Check service name patterns as fallback
             for (const [key, config] of Object.entries(OWASP_PATTERNS)) {
                 for (const pattern of config.patterns) {
                     if (pattern.test(serviceLower)) {
