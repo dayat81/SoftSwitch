@@ -451,20 +451,16 @@
         let ipFilter = null;
         let blacklistData = null;
 
-        // Fetch NORMAL traffic stats from separate endpoint
+        // Fetch ALL traffic stats and render
         async function fetchStats() {
             try {
-                const res = await fetch('/api/stats/normal');
+                const res = await fetch('/api/stats');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 if (!Array.isArray(data)) throw new Error('Invalid data format');
                 renderTable(data);
             } catch (e) {
                 console.error("Fetch error:", e);
-                // Fallback to old endpoint
-                const res = await fetch('/api/stats');
-                const data = await res.json();
-                renderTable(data);
             } finally {
                 const overlay = document.getElementById('loading-overlay');
                 if (overlay) overlay.style.display = 'none';
@@ -485,7 +481,16 @@ function formatBytes(bytes) {
             body.innerHTML = '';
             document.getElementById('hidden-count').innerText = `${normalHiddenItems.size} Hidden`;
             
+            // Validate data format
+            if (!Array.isArray(data)) {
+                console.error("Invalid data format:", data);
+                return;
+            }
+            
             data.forEach(service => {
+                // Skip invalid entries
+                if (!service || typeof service !== 'object') return;
+                if (!service.service) return;
                 // Service summary row
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
@@ -957,7 +962,7 @@ function formatBytes(bytes) {
             
             // Get destination port from service name or flow
             // Service names may include port like "192.168.0.160:8081" or just "Local-Network"
-            const serviceLower = serviceName.toLowerCase();
+            const serviceLower = (serviceName || "").toLowerCase();
             
             // Port-based classification for multi-port attack servers
             if (serviceLower.includes(':8081') || /sql|injection|query|select|union/.test(serviceLower)) {
@@ -992,18 +997,23 @@ function formatBytes(bytes) {
             return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
         }
 
-        // Fetch MALICIOUS traffic stats from separate endpoint
+        // Fetch ALL traffic stats and filter for malicious
         function fetchMaliciousStats() {
-            fetch('/api/stats/malicious')
+            fetch('/api/stats')
                 .then(res => res.json())
-                .then(data => renderMaliciousTable(data))
-                .catch(e => {
-                    console.error("Fetch error:", e);
-                    // Fallback to old endpoint
-                    fetch('/api/stats')
-                        .then(res => res.json())
-                        .then(data => renderMaliciousTable(data));
-                });
+                .then(data => {
+                    // Filter for internal traffic (malicious)
+                    const maliciousData = data.filter(service => {
+                        if (!service.details) return false;
+                        return service.details.some(flow => {
+                            const src = flow.src || '';
+                            const dst = flow.dst || '';
+                            return src.startsWith('192.168.0.') && dst.startsWith('192.168.0.');
+                        });
+                    });
+                    renderMaliciousTable(maliciousData);
+                })
+                .catch(e => console.error("Fetch error:", e));
         }
 
         function renderMaliciousTable(data) {
