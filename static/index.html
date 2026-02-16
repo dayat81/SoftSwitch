@@ -917,15 +917,12 @@ function formatBytes(bytes) {
             const body = document.getElementById('malicious-stats-body');
             if (!body) return;
             
-            body.innerHTML = '';
-            let maliciousCount = 0;
-            const categoryCounts = { injection: 0, xss: 0, traversal: 0, rce: 0, brute: 0, scan: 0, unknown: 0 };
-            
             fetch('/api/blacklist')
                 .then(res => res.json())
                 .then(blacklistData => {
                     const customServices = blacklistData.custom_services || {};
                     const maliciousFlows = [];
+                    const categoryCounts = { injection: 0, xss: 0, traversal: 0, rce: 0, brute: 0, scan: 0, unknown: 0 };
                     
                     // Collect all malicious flows
                     data.forEach(service => {
@@ -941,11 +938,14 @@ function formatBytes(bytes) {
                                                   dstService.includes('Attacker');
                                 
                                 if (isMalicious) {
-                                    maliciousCount++;
                                     const attackInfo = classifyOWASPAttack(service.service, srcService || dstService);
                                     categoryCounts[attackInfo.category]++;
                                     
+                                    // Create unique ID for this flow
+                                    const flowId = `${flow.src}-${flow.dst}-${flow.proto}`;
+                                    
                                     maliciousFlows.push({
+                                        id: flowId,
                                         flow,
                                         srcService,
                                         dstService,
@@ -957,7 +957,7 @@ function formatBytes(bytes) {
                         }
                     });
                     
-                    // Update category stats
+                    // Update category stats (no blink - just text update)
                     document.getElementById('stat-injection').innerText = categoryCounts.injection;
                     document.getElementById('stat-xss').innerText = categoryCounts.xss;
                     document.getElementById('stat-traversal').innerText = categoryCounts.traversal;
@@ -967,60 +967,88 @@ function formatBytes(bytes) {
                     
                     // Update main badge
                     const countBadge = document.getElementById('malicious-count');
+                    const maliciousCount = maliciousFlows.length;
                     if (countBadge) {
                         countBadge.innerText = maliciousCount;
                         countBadge.style.display = maliciousCount > 0 ? 'inline-block' : 'none';
                     }
                     
-                    // Render table rows grouped by category
+                    // Handle empty state
                     if (maliciousCount === 0) {
-                        body.innerHTML = `
-                            <tr>
-                                <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                                    <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-                                    <div>No malicious traffic detected</div>
-                                    <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
-                                </td>
-                            </tr>
-                        `;
+                        if (body.children.length === 0 || body.children[0].innerHTML.includes('No malicious')) {
+                            body.innerHTML = `
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
+                                        <div>No malicious traffic detected</div>
+                                        <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
+                                    </td>
+                                </tr>
+                            `;
+                        }
                         return;
                     }
                     
                     // Sort by attack category
                     maliciousFlows.sort((a, b) => a.attackInfo.category.localeCompare(b.attackInfo.category));
                     
-                    maliciousFlows.forEach(({ flow, srcService, dstService, attackInfo, service }) => {
-                        const tr = document.createElement('tr');
-                        tr.style.background = 'rgba(239, 68, 68, 0.05)';
-                        tr.style.borderLeft = `3px solid ${getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#ef4444'}`;
-                        
+                    // Track which rows we've updated
+                    const updatedIds = new Set();
+                    
+                    // Update or create rows
+                    maliciousFlows.forEach(({ id, flow, srcService, dstService, attackInfo, service }, index) => {
+                        updatedIds.add(id);
+                        let row = document.getElementById(`malicious-row-${id}`);
                         const displayService = srcService || dstService || service.service;
                         
-                        tr.innerHTML = `
-                            <td>
-                                <span class="owasp-category ${attackInfo.class}">
-                                    ${attackInfo.icon} ${attackInfo.name}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="mono" style="font-size: 0.8rem; color: #fbbf24;">${service.service || 'Unknown'}</div>
-                            </td>
-                            <td>
-                                <div class="mono">${flow.src}</div>
-                                <div class="host">${displayService}</div>
-                            </td>
-                            <td class="mono">${flow.dst}</td>
-                            <td style="text-align: right; color: #ef4444; font-weight: 600;">${flow.pps || 0}</td>
-                            <td style="text-align: right; font-weight: 800;">${flow.pkts ? flow.pkts.toLocaleString() : 0}</td>
-                            <td style="text-align: right; color: #60a5fa;">${formatBytes(flow.bytes)}</td>
-                            <td style="text-align: center;">
-                                <button onclick="quickAction('block', '${flow.src}')" 
-                                        class="btn-block" style="padding: 5px 12px; font-size: 0.7rem;">
-                                    BLOCK
-                                </button>
-                            </td>
-                        `;
-                        body.appendChild(tr);
+                        if (!row) {
+                            // Create new row
+                            row = document.createElement('tr');
+                            row.id = `malicious-row-${id}`;
+                            row.style.background = 'rgba(239, 68, 68, 0.05)';
+                            row.style.borderLeft = '3px solid #ef4444';
+                            row.innerHTML = `
+                                <td>
+                                    <span class="owasp-category ${attackInfo.class}">
+                                        ${attackInfo.icon} ${attackInfo.name}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="mono" style="font-size: 0.8rem; color: #fbbf24;">${service.service || 'Unknown'}</div>
+                                </td>
+                                <td>
+                                    <div class="mono">${flow.src}</div>
+                                    <div class="host">${displayService}</div>
+                                </td>
+                                <td class="mono">${flow.dst}</td>
+                                <td class="col-pps" style="text-align: right; color: #ef4444; font-weight: 600;">${flow.pps || 0}</td>
+                                <td class="col-pkts" style="text-align: right; font-weight: 800;">${flow.pkts ? flow.pkts.toLocaleString() : 0}</td>
+                                <td class="col-bytes" style="text-align: right; color: #60a5fa;">${formatBytes(flow.bytes)}</td>
+                                <td style="text-align: center;">
+                                    <button onclick="quickAction('block', '${flow.src}')" 
+                                            class="btn-block" style="padding: 5px 12px; font-size: 0.7rem;">
+                                        BLOCK
+                                    </button>
+                                </td>
+                            `;
+                            body.appendChild(row);
+                        } else {
+                            // Update only changed values (no visual flash)
+                            const ppsCell = row.querySelector('.col-pps');
+                            const pktsCell = row.querySelector('.col-pkts');
+                            const bytesCell = row.querySelector('.col-bytes');
+                            
+                            if (ppsCell) ppsCell.innerText = flow.pps || 0;
+                            if (pktsCell) pktsCell.innerText = flow.pkts ? flow.pkts.toLocaleString() : 0;
+                            if (bytesCell) bytesCell.innerText = formatBytes(flow.bytes);
+                        }
+                    });
+                    
+                    // Remove rows that no longer exist (but preserve if data is just empty)
+                    Array.from(body.children).forEach(row => {
+                        if (row.id && !updatedIds.has(row.id.replace('malicious-row-', ''))) {
+                            row.remove();
+                        }
                     });
                 });
         }
@@ -1028,6 +1056,7 @@ function formatBytes(bytes) {
         // Track if we're on malicious tab
         let isMaliciousTabActive = false;
         let maliciousRefreshInterval = null;
+        let maliciousFlowsCache = new Map(); // Cache for stable updates
 
         function resetMaliciousCounters() {
             if (!confirm("Reset all malicious traffic counters?")) return;
