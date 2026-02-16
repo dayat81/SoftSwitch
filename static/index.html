@@ -770,21 +770,23 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
-        // Reset ONLY normal traffic counters (UI only, does NOT affect malicious)
+        // Reset ONLY normal traffic data structures
         async function resetStats() {
             if (!confirm("Reset NORMAL traffic counters?\n(Malicious counters will NOT be affected)")) return;
             
-            // Only reset hidden tracking variables for normal traffic
-            hiddenItems.clear();
-            expandedServices.clear();
+            // Clear normal-specific hashmaps/sets
+            normalFlowsCache.clear();
+            normalHiddenItems.clear();
+            normalExpandedServices.clear();
             
-            // Clear and refresh the display
+            // Clear normal-specific UI
             const body = document.getElementById('stats-body');
             if (body) body.innerHTML = '';
+            document.getElementById('hidden-count').innerText = '0 Hidden';
             
-            // Re-fetch to get current state (does NOT reset backend)
+            // Re-fetch to populate fresh
             fetchStats();
-            console.log('Normal traffic counters reset (malicious unaffected)');
+            console.log('Normal traffic data reset (malicious unaffected)');
         }
 
         async function action(type) {
@@ -1110,6 +1112,12 @@ function formatBytes(bytes) {
         let isMaliciousTabActive = false;
         let maliciousRefreshInterval = null;
         let maliciousFlowsCache = new Map(); // Cache for stable updates
+        
+        // Separate tracking for normal vs malicious flows
+        let normalFlowsCache = new Map();    // Normal traffic flows
+        let normalHiddenItems = new Set();   // Hidden items for normal tab only
+        let normalExpandedServices = new Set(); // Expanded services for normal tab only
+        let maliciousHiddenItems = new Set();   // Hidden items for malicious tab only
 
         // Reset ONLY malicious traffic counters (separate from normal traffic)
         function resetMaliciousCounters() {
