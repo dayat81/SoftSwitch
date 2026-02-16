@@ -802,7 +802,13 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
-        setInterval(fetchStats, 1000);
+        setInterval(() => {
+            fetchStats();
+            // Also refresh malicious tab if active
+            if (isMaliciousTabActive) {
+                fetchMaliciousStats();
+            }
+        }, 1000);
         fetchStats();
 
         // OWASP Attack Classification Patterns
@@ -1019,24 +1025,76 @@ function formatBytes(bytes) {
                 });
         }
 
+        // Track if we're on malicious tab
+        let isMaliciousTabActive = false;
+        let maliciousRefreshInterval = null;
+
+        function resetMaliciousCounters() {
+            if (!confirm("Reset all malicious traffic counters?")) return;
+            
+            // Reset counters visually
+            document.getElementById('stat-injection').innerText = '0';
+            document.getElementById('stat-xss').innerText = '0';
+            document.getElementById('stat-traversal').innerText = '0';
+            document.getElementById('stat-rce').innerText = '0';
+            document.getElementById('stat-brute').innerText = '0';
+            document.getElementById('stat-scan').innerText = '0';
+            document.getElementById('malicious-count').innerText = '0';
+            document.getElementById('malicious-count').style.display = 'none';
+            
+            // Clear the table and show empty state
+            const body = document.getElementById('malicious-stats-body');
+            body.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
+                        <div>Counters reset - No malicious traffic detected</div>
+                        <div style="font-size: 0.8rem; margin-top: 10px;">Monitor is actively watching for threats...</div>
+                    </td>
+                </tr>
+            `;
+            
+            // Call API reset
+            fetch('/api/reset', { method: 'POST' })
+                .then(() => {
+                    console.log('Counters reset');
+                    setTimeout(fetchMaliciousStats, 500);
+                });
+        }
+
         function switchDashboardTab(tab) {
             const mainDash = document.getElementById('main-dashboard');
             const maliciousDash = document.getElementById('malicious-dashboard');
             const tabMain = document.getElementById('tab-main');
             const tabMalicious = document.getElementById('tab-malicious');
             
+            // Clear existing intervals
+            if (maliciousRefreshInterval) {
+                clearInterval(maliciousRefreshInterval);
+                maliciousRefreshInterval = null;
+            }
+            
             if (tab === 'main') {
+                isMaliciousTabActive = false;
                 mainDash.style.display = 'block';
                 maliciousDash.style.display = 'none';
                 tabMain.classList.add('active');
                 tabMalicious.classList.remove('active');
                 fetchStats();
             } else if (tab === 'malicious') {
+                isMaliciousTabActive = true;
                 mainDash.style.display = 'none';
                 maliciousDash.style.display = 'block';
                 tabMain.classList.remove('active');
                 tabMalicious.classList.add('active');
                 fetchMaliciousStats();
+                
+                // Start live updates for malicious tab
+                maliciousRefreshInterval = setInterval(() => {
+                    if (isMaliciousTabActive) {
+                        fetchMaliciousStats();
+                    }
+                }, 1000);
             }
         }
     </script>
@@ -1057,6 +1115,13 @@ function formatBytes(bytes) {
                 </button>
             </div>
         </header>
+
+        <!-- Controls for malicious tab -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <button class="btn-hide" onclick="resetMaliciousCounters()" style="margin-right: 10px;">
+                🔄 RESET COUNTERS
+            </button>
+        </div>
 
         <!-- OWASP Category Stats -->
         <div class="owasp-stats-grid">
