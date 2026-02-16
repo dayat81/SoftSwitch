@@ -889,7 +889,7 @@ function formatBytes(bytes) {
             }
         };
 
-        // Behavioral detection - analyze traffic patterns for OWASP attacks
+        // Pattern-based detection - classify by attack type from service/URL patterns
         function classifyOWASPAttack(serviceName, flow) {
             if (!serviceName || !flow) return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
             
@@ -897,41 +897,60 @@ function formatBytes(bytes) {
             const src = flow.src || '';
             const dst = flow.dst || '';
             const pkts = flow.pkts || 0;
-            const pps = flow.pps || 0;
-            const bytes = flow.bytes || 0;
             
-            // Check for internal attack traffic (both directions)
-            // .113 -> .160 = attack requests
-            // .160 -> .113 = target responses to attacks
+            // Only classify internal attack traffic
             const isInternalAttackTraffic = (
                 (src === '192.168.0.113' && dst === '192.168.0.160') ||
                 (src === '192.168.0.160' && dst === '192.168.0.113')
             );
             
-            if (isInternalAttackTraffic) {
-                // High volume attack traffic (both directions)
-                if (pkts > 1000 || pps > 50 || bytes > 500000) {
-                    return { category: 'injection', name: 'Injection Attack', class: 'owasp-injection', icon: '💉' };
-                }
-                
-                // Medium volume - scanning or probing
-                if (pkts > 100 || bytes > 50000) {
-                    return { category: 'scan', name: 'Port Scan/Recon', class: 'owasp-scan', icon: '🔍' };
-                }
-                
-                // Low volume but still internal attack related
-                if (pkts > 10) {
-                    return { category: 'brute', name: 'Brute Force', class: 'owasp-brute', icon: '🔐' };
-                }
+            if (!isInternalAttackTraffic) {
+                return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
             }
             
-            // Check service name patterns as fallback
-            for (const [key, config] of Object.entries(OWASP_PATTERNS)) {
-                for (const pattern of config.patterns) {
-                    if (pattern.test(serviceLower)) {
-                        return { category: key, ...config };
-                    }
-                }
+            // Need minimum traffic to be considered an attack
+            if (pkts < 10) {
+                return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
+            }
+            
+            // Pattern-based classification by attack type
+            // SQL Injection patterns
+            if (/login|search|user|query|api|data|sql|union|select|or.*=|'.*=''/i.test(serviceLower)) {
+                return { category: 'injection', name: 'SQL Injection', class: 'owasp-injection', icon: '💉' };
+            }
+            
+            // XSS patterns
+            if (/comment|profile|post|feedback|input|xss|script|alert|svg|img|iframe|onload|onerror/i.test(serviceLower)) {
+                return { category: 'xss', name: 'XSS Attack', class: 'owasp-xss', icon: '🌐' };
+            }
+            
+            // Path Traversal patterns
+            if (/download|view|file|include|read|path|traversal|\.\.|etc|passwd|shadow|windows|system32/i.test(serviceLower)) {
+                return { category: 'traversal', name: 'Path Traversal', class: 'owasp-traversal', icon: '📁' };
+            }
+            
+            // RCE / Command Injection patterns
+            if (/ping|exec|dns|lookup|run|command|cmd|rce|whoami|cat|ls|id|uname|bash|sh/i.test(serviceLower)) {
+                return { category: 'rce', name: 'Command Injection', class: 'owasp-rce', icon: '⚡' };
+            }
+            
+            // Brute Force patterns
+            if (/brute|force|attempt|login.*password|auth|signin|username.*password/i.test(serviceLower)) {
+                return { category: 'brute', name: 'Brute Force', class: 'owasp-brute', icon: '🔐' };
+            }
+            
+            // Port Scan patterns
+            if (/nmap|scan|port|probe|syn|connect|ack|fin/i.test(serviceLower)) {
+                return { category: 'scan', name: 'Port Scan', class: 'owasp-scan', icon: '🔍' };
+            }
+            
+            // Default for internal attack traffic that doesn't match specific patterns
+            // Classify as injection if high volume, scanning if medium
+            if (pkts > 1000) {
+                return { category: 'injection', name: 'Injection Attack', class: 'owasp-injection', icon: '💉' };
+            }
+            if (pkts > 100) {
+                return { category: 'scan', name: 'Port Scan/Recon', class: 'owasp-scan', icon: '🔍' };
             }
             
             return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
