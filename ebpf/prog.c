@@ -145,6 +145,21 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } Map_blacklist SEC(".maps");
 
+// Classify traffic as malicious based on internal network patterns
+static inline bool is_malicious_traffic(__u32 src_ipv4, __u32 dst_ipv4)
+{
+    // Check for internal 192.168.0.x traffic (0xC0A800xx in network byte order)
+    __u32 src_net = src_ipv4 & 0xFFFFFF00;  // /24 network
+    __u32 dst_net = dst_ipv4 & 0xFFFFFF00;
+    __u32 internal_net = 0xC0A80000;  // 192.168.0.0
+    
+    if (src_net == internal_net && dst_net == internal_net) {
+        // Both source and dest are in 192.168.0.x range
+        return true;
+    }
+    return false;
+}
+
 struct xdp_stats
 {
     __u64 rx_dropped_bytes;
@@ -1058,7 +1073,7 @@ redirect:
         }
         // bpf_printk("[REDIRECT] to: %d, packets: %llu, bytes: %llu", entry->iface_index, traffic_stat.rx_redirected_packets, traffic_stat.rx_redirected_bytes);
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
         bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
     } else {
         bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
@@ -1088,7 +1103,7 @@ drop:
             traffic_stat.rx_dropped_packets = 1;
         }
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
         bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
     } else {
         bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
@@ -1118,7 +1133,7 @@ pass:
             traffic_stat.rx_passed_packets = 1;
         }
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
         bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
     } else {
         bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
