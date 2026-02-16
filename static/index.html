@@ -401,8 +401,8 @@
                 <div id="hidden-count" onclick="openHidden()">0 Hidden</div>
                 <button class="btn-hide" onclick="openBlocks()" style="margin-right: 10px;">MANAGE BLOCKS</button>
                 <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;"
-                    title="Reset only normal traffic counters"
-                >RESET NORMAL COUNTERS</button>
+                    title="Reset eBPF hashmap (affects all traffic)"
+                >🔄 RESET ALL (eBPF)</button>
                 <input type="text" id="target-input" placeholder="IP Address or Service (e.g. Netflix)">
                 <button class="btn-block" onclick="action('block')">BLOCK</button>
                 <button class="btn-unblock" onclick="action('unblock')">UNBLOCK</button>
@@ -783,14 +783,21 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
-        // Reset ONLY normal traffic data structures
+        // Reset normal traffic - ALSO resets eBPF hashmap (affects both tabs)
         async function resetStats() {
-            if (!confirm("Reset NORMAL traffic counters?\n(Malicious counters will NOT be affected)")) return;
+            if (!confirm("Reset ALL traffic counters?\n(This will reset the eBPF backend hashmap and affect both normal and malicious traffic)")) return;
+            
+            // Reset eBPF backend hashmap (affects all traffic)
+            await fetch('/api/reset', { method: 'POST' });
             
             // Clear normal-specific hashmaps/sets
             normalFlowsCache.clear();
             normalHiddenItems.clear();
             normalExpandedServices.clear();
+            
+            // Also clear malicious hashmaps since backend is reset
+            maliciousFlowsCache.clear();
+            maliciousHiddenItems.clear();
             
             // Reset shared references to normal hashmaps
             hiddenItems = normalHiddenItems;
@@ -801,9 +808,12 @@ function formatBytes(bytes) {
             if (body) body.innerHTML = '';
             document.getElementById('hidden-count').innerText = '0 Hidden';
             
-            // Force re-render
+            // Force re-render of both tabs
             fetchStats();
-            console.log('Normal traffic data reset (malicious unaffected)');
+            if (isMaliciousTabActive) {
+                fetchMaliciousStats();
+            }
+            console.log('eBPF hashmap reset - all traffic counters cleared');
         }
 
         async function action(type) {
