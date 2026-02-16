@@ -401,8 +401,8 @@
                 <div id="hidden-count" onclick="openHidden()">0 Hidden</div>
                 <button class="btn-hide" onclick="openBlocks()" style="margin-right: 10px;">MANAGE BLOCKS</button>
                 <button class="btn-hide" onclick="resetStats()" style="margin-right: 10px;"
-                    title="Reset eBPF hashmap (affects all traffic)"
-                >🔄 RESET ALL (eBPF)</button>
+                    title="Reset normal traffic counters only"
+                >🔄 RESET NORMAL</button>
                 <input type="text" id="target-input" placeholder="IP Address or Service (e.g. Netflix)">
                 <button class="btn-block" onclick="action('block')">BLOCK</button>
                 <button class="btn-unblock" onclick="action('unblock')">UNBLOCK</button>
@@ -451,17 +451,21 @@
         let ipFilter = null;
         let blacklistData = null;
 
+        // Fetch NORMAL traffic stats from separate endpoint
         async function fetchStats() {
             try {
-                const res = await fetch('/api/stats');
+                const res = await fetch('/api/stats/normal');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 if (!Array.isArray(data)) throw new Error('Invalid data format');
                 renderTable(data);
             } catch (e) {
                 console.error("Fetch error:", e);
+                // Fallback to old endpoint
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                renderTable(data);
             } finally {
-                // Always hide overlay after first attempt
                 const overlay = document.getElementById('loading-overlay');
                 if (overlay) overlay.style.display = 'none';
             }
@@ -783,23 +787,19 @@ function formatBytes(bytes) {
             fetchStats();
         }
 
-        // Reset normal traffic - ALSO resets eBPF hashmap (affects both tabs)
+        // Reset ONLY normal traffic counters (separate from malicious)
         async function resetStats() {
-            if (!confirm("Reset ALL traffic counters?\n(This will reset the eBPF backend hashmap and affect both normal and malicious traffic)")) return;
+            if (!confirm("Reset NORMAL traffic counters?\n(Malicious counters will NOT be affected)")) return;
             
-            // Reset eBPF backend hashmap (affects all traffic)
-            await fetch('/api/reset', { method: 'POST' });
+            // Call separate reset endpoint for normal traffic
+            await fetch('/api/reset/normal', { method: 'POST' });
             
             // Clear normal-specific hashmaps/sets
             normalFlowsCache.clear();
             normalHiddenItems.clear();
             normalExpandedServices.clear();
             
-            // Also clear malicious hashmaps since backend is reset
-            maliciousFlowsCache.clear();
-            maliciousHiddenItems.clear();
-            
-            // Reset shared references to normal hashmaps
+            // Reset shared references
             hiddenItems = normalHiddenItems;
             expandedServices = normalExpandedServices;
             
@@ -808,12 +808,9 @@ function formatBytes(bytes) {
             if (body) body.innerHTML = '';
             document.getElementById('hidden-count').innerText = '0 Hidden';
             
-            // Force re-render of both tabs
+            // Re-render
             fetchStats();
-            if (isMaliciousTabActive) {
-                fetchMaliciousStats();
-            }
-            console.log('eBPF hashmap reset - all traffic counters cleared');
+            console.log('Normal traffic counters reset (malicious unaffected)');
         }
 
         async function action(type) {
@@ -995,12 +992,18 @@ function formatBytes(bytes) {
             return { category: 'unknown', name: 'Unknown', class: 'owasp-unknown', icon: '❓' };
         }
 
-        // Malicious Traffic Tab Functions
+        // Fetch MALICIOUS traffic stats from separate endpoint
         function fetchMaliciousStats() {
-            fetch('/api/stats')
+            fetch('/api/stats/malicious')
                 .then(res => res.json())
                 .then(data => renderMaliciousTable(data))
-                .catch(e => console.error("Fetch error:", e));
+                .catch(e => {
+                    console.error("Fetch error:", e);
+                    // Fallback to old endpoint
+                    fetch('/api/stats')
+                        .then(res => res.json())
+                        .then(data => renderMaliciousTable(data));
+                });
         }
 
         function renderMaliciousTable(data) {

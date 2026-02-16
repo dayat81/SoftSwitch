@@ -116,6 +116,26 @@ struct
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } Map_stats_traffic SEC(".maps");
 
+// Map for normal traffic (separate from malicious)
+struct
+{
+    __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
+    __type(key, struct traffic_key); // ipv4
+    __type(value, struct traffic_stats);
+    __uint(max_entries, 32000);
+    __uint(map_flags, BPF_F_NO_COMMON_LRU);
+} Map_stats_traffic_normal SEC(".maps");
+
+// Map for malicious/attack traffic
+struct
+{
+    __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
+    __type(key, struct traffic_key); // ipv4
+    __type(value, struct traffic_stats);
+    __uint(max_entries, 32000);
+    __uint(map_flags, BPF_F_NO_COMMON_LRU);
+} Map_stats_traffic_malicious SEC(".maps");
+
 // Blacklist map for blocking IPs
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -1037,7 +1057,12 @@ redirect:
             traffic_stat.rx_redirected_packets = 1;
         }
         // bpf_printk("[REDIRECT] to: %d, packets: %llu, bytes: %llu", entry->iface_index, traffic_stat.rx_redirected_packets, traffic_stat.rx_redirected_bytes);
-        bpf_map_update_elem(&Map_stats_traffic, &t_key, &traffic_stat, BPF_ANY);
+        // Classify and store in appropriate map
+    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    } else {
+        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+    }
     }
     return bpf_redirect(entry->iface_index, 0);
 
@@ -1062,7 +1087,12 @@ drop:
             traffic_stat.rx_dropped_bytes = size;
             traffic_stat.rx_dropped_packets = 1;
         }
-        bpf_map_update_elem(&Map_stats_traffic, &t_key, &traffic_stat, BPF_ANY);
+        // Classify and store in appropriate map
+    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    } else {
+        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+    }
     }
     return XDP_DROP;
 
@@ -1087,7 +1117,12 @@ pass:
             traffic_stat.rx_passed_bytes = size;
             traffic_stat.rx_passed_packets = 1;
         }
-        bpf_map_update_elem(&Map_stats_traffic, &t_key, &traffic_stat, BPF_ANY);
+        // Classify and store in appropriate map
+    if (is_malicious_traffic(t_key.src_ip, t_key.dst_ip)) {
+        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    } else {
+        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+    }
     }
     return XDP_PASS;
 }
