@@ -416,9 +416,9 @@ def unblock_target():
 
 @app.route('/api/reset', methods=['POST'])
 def reset_stats():
-    stats_id = get_map_id("Map_stats_traff")
+    stats_id = get_map_id("Map_traff_all")
     if not stats_id:
-        return jsonify({"status": "error", "message": "Map_stats_traffic not found"}), 500
+        return jsonify({"status": "error", "message": "Map_traff_all not found"}), 500
     
     try:
         cmd_dump = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]

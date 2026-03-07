@@ -55,7 +55,7 @@ struct port_cfg
     __u16 pvid;
     // __u16 vlan_bitmask[256];
     __u64 vlan_bitmask[64];
-    __u8 mac[6];\
+    __u8 mac[6];
     __u16 transparent;
     __u16 ingress_filtering;
     __u16 hook_drop;
@@ -68,7 +68,7 @@ volatile const __u8 PORT_COUNT;
 volatile const struct port_cfg PORTS_CFG_BY_IDX[MAX_IFACES];
 
 volatile const __u8 PORTS_IDX[MAX_IFACES];
-volatile const __u8 STATS_ENABLED;\
+volatile const __u8 STATS_ENABLED;
 
 #define VLAN_VID_MASK 0x0fff /* VLAN Identifier */
 #define VLAN_HDR_SZ 4        /* bytes */
@@ -180,7 +180,7 @@ struct xdp_stats
     __u64 rx_passed_packets;
     __u64 rx_redirected_bytes;
     __u64 rx_redirected_packets;
-    __u64 rx_last_timestamp;\
+    __u64 rx_last_timestamp;
 
     __u64 tx_redirected_bytes;
     __u64 tx_redirected_packets;
@@ -213,7 +213,7 @@ static __always_inline int vlan_tag_push(struct xdp_md *ctx, struct ethhdr *eth,
         return -1;
 
     /* Need to re-evaluate data_end and data after head adjustment, and
-     * bounds check, even though we know there is enough space (as we\
+     * bounds check, even though we know there is enough space (as we
      * increased it).
      */
     data_end = (void *)(long)ctx->data_end;
@@ -374,7 +374,7 @@ int tail_call1B(struct __sk_buff *ctx)
             {
                 bpf_clone_redirect(ctx, cfg->if_index, BPF_F_INGRESS);
             }
-            else\
+            else
             {
                 bpf_clone_redirect(ctx, cfg->if_index, 0);
             }
@@ -422,7 +422,7 @@ int tail_call2(struct __sk_buff *ctx)
             {
                 bpf_clone_redirect(ctx, cfg->if_index, BPF_F_INGRESS);
             }
-            else\
+            else
             {
                 bpf_clone_redirect(ctx, cfg->if_index, 0);
             }
@@ -566,7 +566,7 @@ int Prog_egress_tc(struct __sk_buff *ctx)
             {
                 accept = 1;
             }
-            else\
+            else
             {
                 __u8 section = dst_key.vlan / 64;
                 __u64 offset_bitmask = 1 << (dst_key.vlan % 64);
@@ -623,7 +623,7 @@ int Prog_egress_tc(struct __sk_buff *ctx)
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_TAGGED);
         }
-        else\
+        else
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_UNTAGGED);
         }
@@ -646,21 +646,21 @@ int Prog_egress_tc(struct __sk_buff *ctx)
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_TAGGED);
         }
-        else\
+        else
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_UNTAGGED);
         }
         return TC_ACT_SHOT;
     }
     else if (val_src.ktimestamp > entry->ktimestamp + FDB_MAX_AGE_NS || entry->ktimestamp > val_src.ktimestamp)
-    {\
+    {
         bpf_map_delete_elem(&Map_fdb_xdp, &dst_key);
         bpf_printk("[TC_EGRESS] HANDLE BROADCAST FRAME 3, tagged: %d", PKT_IS_TAGGED);
         if (PKT_IS_TAGGED)
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_TAGGED);
         }
-        else\
+        else
         {
             bpf_tail_call(ctx, &Map_jump_table_tc, HANDLE_UNTAGGED);
         }
@@ -790,7 +790,7 @@ int hook_route_xdp(struct xdp_md *ctx)
 
         // goto forward;
     }
-    else\
+    else
     {
         bpf_printk("[hook_route_xdp] drop 7");
         return XDP_DROP;
@@ -846,12 +846,13 @@ int hook_egress_xdp(struct xdp_md *ctx)
 SEC("xdp/Prog_xdp")
 int Prog_xdp(struct xdp_md *ctx)
 {
-    void *data_end = (void *)(unsigned long)ctx->data_end;\
+    void *data_end = (void *)(unsigned long)ctx->data_end;
     void *data = (void *)(unsigned long)ctx->data;
 
     struct traffic_key t_key = {0};
 
     struct traffic_stats traffic_stat = {0};
+    _Bool attack_detected = 0;
     traffic_stat.timestamp = bpf_ktime_get_boot_ns();
     
     __u64 plen = (unsigned long)data_end - (unsigned long)data;
@@ -878,7 +879,7 @@ int Prog_xdp(struct xdp_md *ctx)
     struct vlan_hdr *vlan_header = NULL;
 
     switch (eth_header->h_proto)
-    {\
+    {
     case bpf_htons(ETH_P_8021Q):
         traffic_stat.tagged = 1;
         vlan_header = (void *)eth_header + nh_off;
@@ -888,7 +889,7 @@ int Prog_xdp(struct xdp_md *ctx)
         {
             bpf_printk("[XDP] Dropping malformed (short?) packet 2");
             if (PORT_CFG.hook_drop)
-            {\
+            {
                 bpf_tail_call(ctx, &Map_jump_table_xdp, HOOK_DROP_XDP);
             }
             goto drop;
@@ -899,10 +900,10 @@ int Prog_xdp(struct xdp_md *ctx)
         dst_key.vlan = bpf_ntohs(vlan_header->h_vlan_TCI) & VLAN_VID_MASK;
 
         if (dst_key.vlan < 1 || dst_key.vlan > 4094)
-        {\
+        {
             bpf_printk("[XDP] Dropping malformed packet VLAN out of range (1-4094): VLAN#%d", dst_key.vlan);
             if (PORT_CFG.hook_drop)
-            {\
+            {
                 bpf_tail_call(ctx, &Map_jump_table_xdp, HOOK_DROP_XDP);
             }
             goto drop;
@@ -964,12 +965,11 @@ int Prog_xdp(struct xdp_md *ctx)
     t_key.vlan = dst_key.vlan;
 
     if (data + nh_off + sizeof(struct iphdr) > data_end)
-    {\
+    {
         bpf_printk("[XDP] DROPPING SHORT NON-IP PACKET?");
         goto drop;
     }
     struct iphdr *ip_header = data + nh_off;
-    // __u16 size = bpf_ntohs(ip_header->tot_len);
 
     t_key.src_ipv4 = ip_header->saddr;
     t_key.dst_ipv4 = ip_header->daddr;
@@ -985,6 +985,62 @@ int Prog_xdp(struct xdp_md *ctx)
 
     t_key.proto_l3 = ip_header->protocol;
     traffic_stat.size = bpf_ntohs(ip_header->tot_len);
+
+    // --- Payload Inspection ---
+    /*
+    if (ip_header->protocol == 6) { // TCP
+        __u32 ip_hdr_len = (ip_header->ihl & 0x0F) << 2;
+        if (ip_hdr_len >= 20 && ip_hdr_len <= 60) {
+            void *tcp_ptr = (void *)ip_header + ip_hdr_len;
+            if (tcp_ptr + sizeof(struct tcphdr) <= data_end) {
+                struct tcphdr *tcp = (struct tcphdr *)tcp_ptr;
+                __u32 tcp_hdr_len = (tcp->doff & 0x0F) << 2;
+                if (tcp_hdr_len >= 20 && tcp_hdr_len <= 60) {
+                    char *payload = (char *)tcp_ptr + tcp_hdr_len;
+                    if ((void *)(payload + 12) <= data_end) {
+                        // Pattern: "UNION SELECT"
+                        if (payload[0] == 'U' && payload[1] == 'N' && payload[2] == 'I' &&
+                            payload[3] == 'O' && payload[4] == 'N' && payload[5] == ' ' &&
+                            payload[6] == 'S' && payload[7] == 'E' && payload[8] == 'L' &&
+                            payload[9] == 'E' && payload[10] == 'C' && payload[11] == 'T') {
+                            attack_detected = 1;
+                        }
+                        // Pattern: "<script>"
+                        else if (payload[0] == '<' && payload[1] == 's' && payload[2] == 'c' &&
+                                 payload[3] == 'r' && payload[4] == 'i' && payload[5] == 'p' &&
+                                 payload[6] == 't' && payload[7] == '>') {
+                            attack_detected = 1;
+                        }
+                        // Pattern: "; /bin/"
+                        else if (payload[0] == ';' && payload[1] == ' ' && payload[2] == '/' &&
+                                 payload[3] == 'b' && payload[4] == 'i' && payload[5] == 'n' &&
+                                 payload[6] == '/') {
+                            attack_detected = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    */
+    
+    if (attack_detected) {
+        // Increment attack count
+        __u32 src_ip_atk = t_key.src_ipv4;
+        __u64 *c = bpf_map_lookup_elem(&Map_attack_cnt, &src_ip_atk);
+        if (c) {
+            (*c)++;
+        } else {
+            __u64 init = 1;
+            bpf_map_update_elem(&Map_attack_cnt, &src_ip_atk, &init, BPF_ANY);
+        }
+        
+        // Add to blacklist
+        __u8 one = 1;
+        bpf_map_update_elem(&Map_blacklist, &src_ip_atk, &one, BPF_ANY);
+        bpf_printk("[XDP] ATTACK DETECTED from %pI4, blacklisting", &src_ip_atk);
+        goto drop;
+    }
 
     struct fdb_key src_key = {0};
     src_key.mac = toUnsigned64(eth_header->h_source);
@@ -1018,7 +1074,7 @@ int Prog_xdp(struct xdp_md *ctx)
     {
         bpf_map_delete_elem(&Map_fdb_xdp, &dst_key);
         bpf_printk("[RETURN_XDP_PASS] fdb entry expired, broadcasting... val_src.ts: %llu, entry->ts: %llu", val_src.ktimestamp, entry->ktimestamp);
-        goto pass;\
+        goto pass;
     }
     else if (entry->tagged && !traffic_stat.tagged)
     {
@@ -1075,7 +1131,7 @@ redirect:
             {
                 traffic_stat.rx_redirected_bytes = traffic->rx_redirected_bytes + traffic_stat.size;
             }
-            else\
+            else
             {
                 // bpf_printk("[REDIRECT] overflow B");
                 traffic_stat.rx_redirected_bytes = traffic_stat.size - (ULLONG_MAX - traffic->rx_redirected_bytes);
@@ -1089,7 +1145,7 @@ redirect:
         // bpf_printk("[REDIRECT] to: %d, packets: %llu, bytes: %llu", entry->iface_index, traffic_stat.rx_redirected_packets, traffic_stat.rx_redirected_bytes);
         // Classify and store in appropriate map
         bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
-        if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
             bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
         } else {
             bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
@@ -1120,7 +1176,7 @@ drop:
         }
         // Classify and store in appropriate map
         bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
-        if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
             bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
         } else {
             bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
@@ -1151,7 +1207,7 @@ pass:
         }
         // Classify and store in appropriate map
         bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
-        if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
             bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
         } else {
             bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
