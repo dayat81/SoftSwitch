@@ -19,7 +19,10 @@
 #include "vmlinux.h"
 #include <bpf_endian.h>
 #include <bpf_helpers.h>
-#include <limits.h>
+
+#ifndef ULLONG_MAX
+#define ULLONG_MAX 18446744073709551615ULL
+#endif
 
 #define to64l(arr) (((__u64)(((__u8 *)(arr))[0]) << 0) +  \
                     ((__u64)(((__u8 *)(arr))[1]) << 8) +  \
@@ -114,7 +117,7 @@ struct
     __type(value, struct traffic_stats);
     __uint(max_entries, 32000);
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
-} Map_stats_traffic SEC(".maps");
+} Map_traff_all SEC(".maps");
 
 // Map for normal traffic (separate from malicious)
 struct
@@ -124,7 +127,7 @@ struct
     __type(value, struct traffic_stats);
     __uint(max_entries, 32000);
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
-} Map_stats_traffic_normal SEC(".maps");
+} Map_traff_norm SEC(".maps");
 
 // Map for malicious/attack traffic
 struct
@@ -134,7 +137,7 @@ struct
     __type(value, struct traffic_stats);
     __uint(max_entries, 32000);
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
-} Map_stats_traffic_malicious SEC(".maps");
+} Map_traff_malic SEC(".maps");
 
 // Blacklist map for blocking IPs
 struct {
@@ -144,6 +147,15 @@ struct {
     __uint(max_entries, 1024);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } Map_blacklist SEC(".maps");
+
+// Track attack counts per source IP
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);   // IPv4 address
+    __type(value, __u64); // Count
+    __uint(max_entries, 1024);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} Map_attack_cnt SEC(".maps");
 
 // Classify traffic as malicious based on internal network patterns
 static inline bool is_malicious_traffic(__u32 src_ipv4, __u32 dst_ipv4)
@@ -840,6 +852,7 @@ int Prog_xdp(struct xdp_md *ctx)
     struct traffic_key t_key = {0};
 
     struct traffic_stats traffic_stat = {0};
+    _Bool attack_detected = 0;
     traffic_stat.timestamp = bpf_ktime_get_boot_ns();
     traffic_stat.size = data_end - data;
 
@@ -960,9 +973,15 @@ int Prog_xdp(struct xdp_md *ctx)
     t_key.src_ipv4 = ip_header->saddr;
     t_key.dst_ipv4 = ip_header->daddr;
 
-    // Blacklist check - drop if destination IP is in blacklist
-    __u8 *blocked = bpf_map_lookup_elem(&Map_blacklist, &t_key.dst_ipv4);
-    if (blocked && *blocked)
+    // Blacklist check
+    __u8 *blocked_src = bpf_map_lookup_elem(&Map_blacklist, &t_key.src_ipv4);
+    if (blocked_src && *blocked_src)
+    {
+        bpf_printk("[XDP] BLOCKED SRC IP: %pI4", &t_key.src_ipv4);
+        goto drop;
+    }
+    __u8 *blocked_dst = bpf_map_lookup_elem(&Map_blacklist, &t_key.dst_ipv4);
+    if (blocked_dst && *blocked_dst)
     {
         bpf_printk("[XDP] BLOCKED DST IP: %pI4", &t_key.dst_ipv4);
         goto drop;
@@ -970,6 +989,58 @@ int Prog_xdp(struct xdp_md *ctx)
 
     t_key.proto_l3 = ip_header->protocol;
     traffic_stat.size = ip_header->tot_len;
+
+    // --- Payload Inspection ---
+    if (ip_header->protocol == 6) { // TCP
+        int ip_hdr_len = ip_header->ihl * 4;
+        if (ip_hdr_len >= 20 && ip_hdr_len <= 60) {
+            struct tcphdr *tcp = (void *)ip_header + ip_hdr_len;
+            if ((void *)(tcp + 1) <= data_end) {
+                int tcp_hdr_len = tcp->doff * 4;
+                if (tcp_hdr_len >= 20 && tcp_hdr_len <= 60) {
+                    char *payload = (char *)tcp + tcp_hdr_len;
+                    if (payload + 12 <= (char *)data_end) {
+                        // Pattern: "UNION SELECT"
+                        if (payload[0] == 'U' && payload[1] == 'N' && payload[2] == 'I' &&
+                            payload[3] == 'O' && payload[4] == 'N' && payload[5] == ' ' &&
+                            payload[6] == 'S' && payload[7] == 'E' && payload[8] == 'L' &&
+                            payload[9] == 'E' && payload[10] == 'C' && payload[11] == 'T') {
+                            attack_detected = 1;
+                        }
+                        // Pattern: "<script>"
+                        else if (payload[0] == '<' && payload[1] == 's' && payload[2] == 'c' &&
+                                 payload[3] == 'r' && payload[4] == 'i' && payload[5] == 'p' &&
+                                 payload[6] == 't' && payload[7] == '>') {
+                            attack_detected = 1;
+                        }
+                        // Pattern: "; /bin/"
+                        else if (payload[0] == ';' && payload[1] == ' ' && payload[2] == '/' &&
+                                 payload[3] == 'b' && payload[4] == 'i' && payload[5] == 'n' &&
+                                 payload[6] == '/') {
+                            attack_detected = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (attack_detected) {
+        // Increment attack count
+        __u64 *c = bpf_map_lookup_elem(&Map_attack_cnt, &t_key.src_ipv4);
+        if (c) {
+            (*c)++;
+        } else {
+            __u64 init = 1;
+            bpf_map_update_elem(&Map_attack_cnt, &t_key.src_ipv4, &init, BPF_ANY);
+        }
+        
+        // Add to blacklist
+        __u8 one = 1;
+        bpf_map_update_elem(&Map_blacklist, &t_key.src_ipv4, &one, BPF_ANY);
+        bpf_printk("[XDP] ATTACK DETECTED from %pI4, blacklisting", &t_key.src_ipv4);
+        goto drop;
+    }
 
     struct fdb_key src_key = {0};
     src_key.mac = toUnsigned64(eth_header->h_source);
@@ -1044,7 +1115,7 @@ redirect:
     if (STATS_ENABLED && t_key.proto_l2 == bpf_htons(ETH_P_IP))
     {
         t_key.target_if_index = entry->iface_index;
-        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_stats_traffic, &t_key);
+        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_traff_all, &t_key);
         if (traffic)
         {
             if (traffic->rx_redirected_packets + 1 < ULLONG_MAX)
@@ -1073,10 +1144,11 @@ redirect:
         }
         // bpf_printk("[REDIRECT] to: %d, packets: %llu, bytes: %llu", entry->iface_index, traffic_stat.rx_redirected_packets, traffic_stat.rx_redirected_bytes);
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
-        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
+    if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
     } else {
-        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+        bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
     }
     }
     return bpf_redirect(entry->iface_index, 0);
@@ -1085,7 +1157,7 @@ drop:
     if (STATS_ENABLED && t_key.proto_l2 == bpf_htons(ETH_P_IP))
     {
         t_key.target_if_index = PORT_CFG.if_index;
-        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_stats_traffic, &t_key);
+        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_traff_all, &t_key);
         if (traffic)
         {
             if (traffic->rx_dropped_packets + 1 < ULLONG_MAX)
@@ -1103,10 +1175,11 @@ drop:
             traffic_stat.rx_dropped_packets = 1;
         }
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
-        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
+    if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
     } else {
-        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+        bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
     }
     }
     return XDP_DROP;
@@ -1115,7 +1188,7 @@ pass:
     if (STATS_ENABLED && t_key.proto_l2 == bpf_htons(ETH_P_IP))
     {
         t_key.target_if_index = PORT_CFG.if_index;
-        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_stats_traffic, &t_key);
+        struct traffic_stats *traffic = bpf_map_lookup_elem(&Map_traff_all, &t_key);
         if (traffic)
         {
             if (traffic->rx_passed_packets + 1 < ULLONG_MAX)
@@ -1133,10 +1206,11 @@ pass:
             traffic_stat.rx_passed_packets = 1;
         }
         // Classify and store in appropriate map
-    if (is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
-        bpf_map_update_elem(&Map_stats_traffic_malicious, &t_key, &traffic_stat, BPF_ANY);
+    bpf_map_update_elem(&Map_traff_all, &t_key, &traffic_stat, BPF_ANY);
+    if (attack_detected || is_malicious_traffic(t_key.src_ipv4, t_key.dst_ipv4)) {
+        bpf_map_update_elem(&Map_traff_malic, &t_key, &traffic_stat, BPF_ANY);
     } else {
-        bpf_map_update_elem(&Map_stats_traffic_normal, &t_key, &traffic_stat, BPF_ANY);
+        bpf_map_update_elem(&Map_traff_norm, &t_key, &traffic_stat, BPF_ANY);
     }
     }
     return XDP_PASS;

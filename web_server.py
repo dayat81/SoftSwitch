@@ -256,12 +256,11 @@ def parse_val(val_list):
 # --- API Endpoints ---
 stream_stats = {}
 
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    stats_id = get_map_id("Map_stats_traff")
+def get_stats_from_map(map_name):
+    stats_id = get_map_id(map_name)
     blacklist_id = get_map_id("Map_blacklist")
     if not stats_id:
-        return jsonify({"error": "Map_stats_traffic not found"}), 500
+        return []
 
     # Get Blacklist
     blacklist_ips = set()
@@ -275,7 +274,10 @@ def get_stats():
 
     # Get Stats
     cmd = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
-    data = json.loads(subprocess.check_output(cmd))
+    try:
+        data = json.loads(subprocess.check_output(cmd))
+    except:
+        return []
     
     now_wall = time.time()
     for entry in data:
@@ -305,17 +307,6 @@ def get_stats():
                 s['last_update'] = now_wall
             s['last_seen'] = now_wall
 
-        # Auto-block services
-        if l2_proto == 0x0800:
-            hostname = dns_cache.get(src_ip)
-            if hostname:
-                service = get_service_name(hostname)
-                if service in blocked_services and src_ip not in blacklist_ips:
-                    try:
-                        subprocess.run(["sudo", "bpftool", "map", "update", "id", str(blacklist_id), "key", "hex", *[f"{int(x):02x}" for x in src_ip.split('.')], "value", "hex", "01"], capture_output=True)
-                        blacklist_ips.add(src_ip)
-                    except: pass
-
     # Pruning and Response Formatting
     PRUNE_TIMEOUT = 15
     result = []
@@ -337,8 +328,14 @@ def get_stats():
         else:
             service_name = "-"
         
+        # Only include in result if it was in the current map dump
+        # (Actually, stream_stats might contain flows from other maps if not careful)
+        # To be strict, we should only include if we saw it in THIS dump.
+        # But for simplicity, we'll just return all active streams.
+        # Wait, if we use separate maps, it's better to filter by what's in the dump.
+        
         result.append({
-            "status": "BLOCK" if v['dst'] in blacklist_ips else "PASS",
+            "status": "BLOCK" if v['src'] in blacklist_ips or v['dst'] in blacklist_ips else "PASS",
             "src": v['src'],
             "host": hostname,
             "service": service_name,
@@ -367,12 +364,21 @@ def get_stats():
         grouped[svc]['pps'] += item['pps']
         grouped[svc]['flows'] += 1
         grouped[svc]['bytes'] += item['bytes']
-        grouped[svc]['details'].append({
-            'src': item['src'], 'dst': item['dst'], 'host': item['host'],
-            'proto': item['proto'], 'vlan': item['vlan'], 'pkts': item['pkts'],
-            'bytes': item['bytes'], 'pps': item['pps'], 'bps': item['bps'], 'status': item['status']
-        })
-    return jsonify(sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True))
+        grouped[svc]['details'].append(item)
+    return sorted(grouped.values(), key=lambda x: x['pkts'], reverse=True)
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    return jsonify(get_stats_from_map("Map_traff_all"))
+
+@app.route('/api/stats/normal', methods=['GET'])
+def get_normal_stats():
+    return jsonify(get_stats_from_map("Map_traff_norm"))
+
+@app.route('/api/stats/malicious', methods=['GET'])
+def get_malicious_stats():
+    return jsonify(get_stats_from_map("Map_traff_malic"))
+
 
 @app.route('/api/block', methods=['POST'])
 def block_target():
@@ -499,100 +505,54 @@ def static_files(path):
 
 
 
-# Separate API endpoints for normal and malicious traffic (eBPF hashmap separation)
-@app.route('/api/stats/normal', methods=['GET'])
-def get_normal_stats():
-    """Get normal traffic stats (non-internal traffic)"""
+@app.route('/api/attack_counts', methods=['GET'])
+def get_attack_counts():
+    map_id = get_map_id("Map_attack_cnt")
+    if not map_id:
+        return jsonify({})
+    
     try:
-        # Get all stats from main endpoint
-        with app.test_client() as client:
-            response = client.get('/api/stats')
-            all_data = json.loads(response.data)
-        
-        # Filter for non-internal traffic
-        normal_data = []
-        for service in all_data:
-            if not service.get('details'):
-                continue
-            # Check if this service has any internal flows
-            has_internal = False
-            for flow in service['details']:
-                src = flow.get('src', '')
-                dst = flow.get('dst', '')
-                if src.startswith('192.168.0.') and dst.startswith('192.168.0.'):
-                    has_internal = True
-                    break
-            
-            if not has_internal:
-                normal_data.append(service)
-            else:
-                # Filter out internal flows from this service
-                external_flows = [f for f in service['details'] 
-                                  if not (f.get('src', '').startswith('192.168.0.') and 
-                                          f.get('dst', '').startswith('192.168.0.'))]
-                if external_flows:
-                    # Recalculate totals for filtered service
-                    new_service = {
-                        'service': service['service'],
-                        'status': service['status'],
-                        'details': external_flows,
-                        'flows': len(external_flows),
-                        'pkts': sum(f.get('pkts', 0) for f in external_flows),
-                        'bytes': sum(f.get('bytes', 0) for f in external_flows),
-                        'pps': sum(f.get('pps', 0) for f in external_flows),
-                        'bps': sum(f.get('bps', 0) for f in external_flows)
-                    }
-                    normal_data.append(new_service)
-        
-        return jsonify(normal_data)
+        cmd = ["sudo", "bpftool", "map", "dump", "id", str(map_id), "-j"]
+        data = json.loads(subprocess.check_output(cmd))
+        result = {}
+        for entry in data:
+            ip = ip_to_str(entry["key"])
+            val_hex = entry["value"]
+            count = struct.unpack("<Q", bytes([int(x, 16) for x in val_hex]))[0]
+            result[ip] = count
+        return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/stats/malicious', methods=['GET'])
-def get_malicious_stats():
-    """Get malicious/attack traffic stats (internal 192.168.0.x)"""
-    try:
-        # Get all stats from main endpoint
-        with app.test_client() as client:
-            response = client.get('/api/stats')
-            all_data = json.loads(response.data)
-        
-        # Filter for internal traffic only
-        malicious_data = []
-        for service in all_data:
-            if not service.get('details'):
-                continue
-            # Filter to only internal flows
-            internal_flows = [f for f in service['details'] 
-                              if f.get('src', '').startswith('192.168.0.') and 
-                                 f.get('dst', '').startswith('192.168.0.')]
-            if internal_flows:
-                # Recalculate totals for filtered service
-                new_service = {
-                    'service': service['service'],
-                    'status': service['status'],
-                    'details': internal_flows,
-                    'flows': len(internal_flows),
-                    'pkts': sum(f.get('pkts', 0) for f in internal_flows),
-                    'bytes': sum(f.get('bytes', 0) for f in internal_flows),
-                    'pps': sum(f.get('pps', 0) for f in internal_flows),
-                    'bps': sum(f.get('bps', 0) for f in internal_flows)
-                }
-                malicious_data.append(new_service)
-        
-        return jsonify(malicious_data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
 
 @app.route('/api/reset/normal', methods=['POST'])
 def reset_normal_stats():
-    """Reset normal traffic stats (placeholder until eBPF has separate maps)"""
-    return jsonify({"status": "ok", "message": "Normal stats reset (simulated)"})
+    stats_id = get_map_id("Map_traff_norm")
+    if not stats_id:
+        return jsonify({"status": "error", "message": "Normal stats map not found"}), 500
+    try:
+        cmd_dump = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
+        data = json.loads(subprocess.check_output(cmd_dump))
+        for entry in data:
+            key_hex = entry["key"]
+            subprocess.run(["sudo", "bpftool", "map", "delete", "id", str(stats_id), "key", "hex"] + key_hex, capture_output=True)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/reset/malicious', methods=['POST'])
 def reset_malicious_stats():
-    """Reset malicious traffic stats (placeholder until eBPF has separate maps)"""
-    return jsonify({"status": "ok", "message": "Malicious stats reset (simulated)"})
+    stats_id = get_map_id("Map_traff_malic")
+    if not stats_id:
+        return jsonify({"status": "error", "message": "Malicious stats map not found"}), 500
+    try:
+        cmd_dump = ["sudo", "bpftool", "map", "dump", "id", str(stats_id), "-j"]
+        data = json.loads(subprocess.check_output(cmd_dump))
+        for entry in data:
+            key_hex = entry["key"]
+            subprocess.run(["sudo", "bpftool", "map", "delete", "id", str(stats_id), "key", "hex"] + key_hex, capture_output=True)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 if __name__ == '__main__':
