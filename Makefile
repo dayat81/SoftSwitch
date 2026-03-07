@@ -5,7 +5,7 @@ CLANG := clang
 CLANG_INCLUDE := -I ./ebpf/include
 
 GO_SOURCE := main.go
-GO_BINARY := main
+GO_BINARY := softswitch
 
 EBPF_SOURCE := ebpf/prog.c
 EBPF_BINARY := ebpf/prog.elf

@@ -449,7 +449,7 @@ type IPRecord struct {
 
 func (port *switchPort) refreshStats(countLocal, traceroute bool) {
 
-	iter := port.eBPF.internals.MapStatsTraffic.Iterate()
+	iter := port.eBPF.internals.MapTraffAll.Iterate()
 	var keyBytes [TRAFFIC_KEY_SIZE]byte
 	seen := make(map[[TRAFFIC_KEY_SIZE]byte]struct{})
 	cpuVals := make([][]byte, runtime.NumCPU())
@@ -569,7 +569,7 @@ func (bridge *BridgeGroup) refreshStats() {
 			portTraffic := new(StatsTraffic)
 			portTraffic.LatestPacket.Timestamp = 1
 
-			iter := port.eBPF.internals.MapStatsTraffic.Iterate()
+			iter := port.eBPF.internals.MapTraffAll.Iterate()
 
 			var keyBytes [TRAFFIC_KEY_SIZE]byte
 
@@ -1049,7 +1049,11 @@ type eBPFInternals struct {
 	MapJumpTableXDP *ebpf.Map `ebpf:"Map_jump_table_xdp"`
 	MapJumpTableTC  *ebpf.Map `ebpf:"Map_jump_table_tc"`
 	MapStatsXDP     *ebpf.Map `ebpf:"Map_stats_xdp"`
-	MapStatsTraffic *ebpf.Map `ebpf:"Map_stats_traffic"`
+	MapTraffAll     *ebpf.Map `ebpf:"Map_traff_all"`
+	MapTraffNorm    *ebpf.Map `ebpf:"Map_traff_norm"`
+	MapTraffMalic   *ebpf.Map `ebpf:"Map_traff_malic"`
+	MapBlacklist    *ebpf.Map `ebpf:"Map_blacklist"`
+	MapAttackCnt    *ebpf.Map `ebpf:"Map_attack_cnt"`
 }
 
 func (internals *eBPFInternals) Close() {
@@ -1066,7 +1070,11 @@ func (internals *eBPFInternals) Close() {
 	internals.ProgHookEgressTC.Close()
 	internals.MapFdbXDP.Close()
 	internals.MapStatsXDP.Close()
-	internals.MapStatsTraffic.Close()
+	internals.MapTraffAll.Close()
+	internals.MapTraffNorm.Close()
+	internals.MapTraffMalic.Close()
+	internals.MapBlacklist.Close()
+	internals.MapAttackCnt.Close()
 	internals.MapJumpTableXDP.Close()
 	internals.MapJumpTableTC.Close()
 }
@@ -1103,6 +1111,11 @@ func (port *switchPort) upEbpf(ifList []*switchPort) error {
 	port.eBPF.spec.Maps["Map_stats_xdp"].Pinning = ebpf.PinByName
 	port.eBPF.spec.Maps["Map_jump_table_xdp"].Pinning = ebpf.PinByName
 	port.eBPF.spec.Maps["Map_jump_table_tc"].Pinning = ebpf.PinByName
+	port.eBPF.spec.Maps["Map_traff_all"].Pinning = ebpf.PinByName
+	port.eBPF.spec.Maps["Map_traff_norm"].Pinning = ebpf.PinByName
+	port.eBPF.spec.Maps["Map_traff_malic"].Pinning = ebpf.PinByName
+	port.eBPF.spec.Maps["Map_blacklist"].Pinning = ebpf.PinByName
+	port.eBPF.spec.Maps["Map_attack_cnt"].Pinning = ebpf.PinByName
 
 	var portCfgVlanBitmask [64]uint64
 	if port.settings.Trunk {
