@@ -160,13 +160,11 @@ struct {
 // Classify traffic as malicious based on internal network patterns
 static inline bool is_malicious_traffic(__u32 src_ipv4, __u32 dst_ipv4)
 {
-    // Check for internal 192.168.0.x traffic (0xC0A800xx in network byte order)
-    __u32 src_net = src_ipv4 & 0xFFFFFF00;  // /24 network
-    __u32 dst_net = dst_ipv4 & 0xFFFFFF00;
-    __u32 internal_net = 0xC0A80000;  // 192.168.0.0
+    unsigned char *s = (unsigned char *)&src_ipv4;
+    unsigned char *d = (unsigned char *)&dst_ipv4;
     
-    if (src_net == internal_net && dst_net == internal_net) {
-        // Both source and dest are in 192.168.0.x range
+    if (s[0] == 192 && s[1] == 168 && s[2] == 0 &&
+        d[0] == 192 && d[1] == 168 && d[2] == 0) {
         return true;
     }
     return false;
@@ -854,9 +852,7 @@ int Prog_xdp(struct xdp_md *ctx)
     struct traffic_stats traffic_stat = {0};
     _Bool attack_detected = 0;
     traffic_stat.timestamp = bpf_ktime_get_boot_ns();
-    
-    __u64 plen = (unsigned long)data_end - (unsigned long)data;
-    traffic_stat.size = (__u16)(plen & 0xFFFF);
+    traffic_stat.size = data_end - data;
 
     struct ethhdr *eth_header = data;
     __u32 nh_off = sizeof(*eth_header);
