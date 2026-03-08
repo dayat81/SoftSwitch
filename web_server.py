@@ -289,7 +289,7 @@ def get_stats_from_map(map_name):
         if l2_proto == 0x0800 and src_ip not in dns_cache:
             threading.Thread(target=resolve_dns, args=(src_ip,), daemon=True).start()
         
-        key = f"{src_ip}-{dst_ip}-{vlan}-{l2_proto}"
+        key = f"{src_ip}-{dst_ip}-{vlan}-{l2_proto}-{map_name}" # Unique per map
         if key not in stream_stats:
             stream_stats[key] = {
                 'src': src_ip, 'dst': dst_ip, 'vlan': vlan, 'proto': l2_proto,
@@ -316,6 +316,10 @@ def get_stats_from_map(map_name):
             to_delete.append(k)
             continue
         
+        # Filter by map name suffix in key to ensure we only return what matches current requested map
+        if not k.endswith(map_name):
+            continue
+
         hostname = dns_cache.get(v['src'], v['src'])
         proto_name = f"0x{v['proto']:04x}"
         if v['proto'] == 0x0800: proto_name = "IPv4"
@@ -327,12 +331,6 @@ def get_stats_from_map(map_name):
             service_name = classify_traffic(v['src'], v['dst'], hostname)
         else:
             service_name = "-"
-        
-        # Only include in result if it was in the current map dump
-        # (Actually, stream_stats might contain flows from other maps if not careful)
-        # To be strict, we should only include if we saw it in THIS dump.
-        # But for simplicity, we'll just return all active streams.
-        # Wait, if we use separate maps, it's better to filter by what's in the dump.
         
         result.append({
             "status": "BLOCK" if v['src'] in blacklist_ips or v['dst'] in blacklist_ips else "PASS",
@@ -556,7 +554,7 @@ def reset_malicious_stats():
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    app.run(host="0.0.0.0", port=5001, threaded=True)
 
 # Add Flask debug and reload
 app.config["DEBUG"] = False
